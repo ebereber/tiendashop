@@ -659,7 +659,6 @@ export type Database = {
       }
       users: {
         Row: {
-          auth_id: string
           avatar_url: string | null
           created_at: string
           email: string
@@ -669,17 +668,15 @@ export type Database = {
           updated_at: string
         }
         Insert: {
-          auth_id: string
           avatar_url?: string | null
           created_at?: string
           email: string
           full_name?: string | null
-          id?: string
+          id: string
           role?: Database["public"]["Enums"]["user_role"]
           updated_at?: string
         }
         Update: {
-          auth_id?: string
           avatar_url?: string | null
           created_at?: string
           email?: string

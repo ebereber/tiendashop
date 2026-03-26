@@ -89,15 +89,16 @@ end$$;
 -- USERS
 -- ============================================================
 
-create table if not exists public.users (
-  id          uuid primary key default gen_random_uuid(),
-  auth_id     uuid not null unique references auth.users(id) on delete cascade,
-  email       text not null unique,
-  full_name   text,
-  avatar_url  text,
-  role        user_role not null default 'buyer',
-  created_at  timestamptz not null default now(),
-  updated_at  timestamptz not null default now()
+
+
+create table public.users (
+  id uuid primary key references auth.users(id) on delete cascade,
+  email text not null unique,
+  full_name text,
+  avatar_url text,
+  role user_role not null default 'buyer',
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
 );
 
 create or replace function public.handle_new_user()
@@ -107,21 +108,15 @@ security definer
 set search_path = public
 as $$
 begin
-  insert into public.users (
-    auth_id,
-    email,
-    full_name,
-    avatar_url,
-    role
-  )
-  values (
-    new.id,
-    new.email,
-    new.raw_user_meta_data ->> 'full_name',
-    new.raw_user_meta_data ->> 'avatar_url',
-    coalesce((new.raw_user_meta_data ->> 'role')::user_role, 'buyer')
-  )
-  on conflict (auth_id) do nothing;
+  insert into public.users (id, email, full_name, avatar_url, role)
+values (
+  new.id,
+  new.email,
+  new.raw_user_meta_data ->> 'full_name',
+  new.raw_user_meta_data ->> 'avatar_url',
+  'buyer'
+)
+on conflict (id) do nothing;
 
   return new;
 end;
@@ -526,7 +521,7 @@ stable
 as $$
   select u.id
   from public.users u
-  where u.auth_id = auth.uid()
+  where u.id = auth.uid()
 $$;
 
 create or replace function public.is_org_member(p_org_id uuid)
@@ -628,12 +623,12 @@ drop policy if exists "saved_stores: solo el dueño" on public.saved_stores;
 create policy "users: ver su propio perfil"
   on public.users
   for select
-  using (auth_id = auth.uid());
+  using (id = auth.uid());
 
 create policy "users: editar su propio perfil"
   on public.users
   for update
-  using (auth_id = auth.uid());
+  using (id = auth.uid());
 
 -- ORGANIZATIONS
 create policy "orgs: ver si es miembro"
