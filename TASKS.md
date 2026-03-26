@@ -9,8 +9,8 @@ Cada task es un módulo — cuando termina, algo nuevo funciona end-to-end.
 
 - [x] TASK-01 — Setup del proyecto
 - [x] TASK-02 — Auth (registro + login + sesión)
-- [ ] **TASK-03 — Dashboard layout + protección de rutas** ← actual
-- [ ] TASK-04 — Onboarding + OAuth con Tiendanube
+- [x] TASK-03 — Dashboard layout + protección de rutas** 
+- [ ] **TASK-04 — Onboarding + OAuth con Tiendanube** ← actual
 - [ ] TASK-05 — OAuth callback (tokens + crear store)
 - [ ] TASK-06 — Sync de productos
 - [ ] TASK-07 — Dashboard resumen
@@ -98,3 +98,78 @@ components/dashboard/header.tsx
 
 - Usuario con sesión activa accede a `/dashboard` y ve el layout completo con sidebar y header
 - Usuario sin sesión intenta entrar a `/dashboard` → redirigido a `/login`
+
+
+## TASK-04 real: unlock dashboard only after Tiendanube connection
+
+Regla principal
+- El dashboard NO es para cualquier usuario registrado
+- El dashboard solo se habilita para usuarios que ya conectaron una tienda Tiendanube
+- No quiero bootstrap merchant manual desde dashboard
+- El botón para iniciar esto vive en la parte pública
+
+Flujo correcto
+1. usuario en pantalla pública ve CTA “Conectar tienda”
+2. inicia OAuth con Tiendanube
+3. acepta en Tiendanube
+4. vuelve a mi app por callback
+5. en callback se persiste todo lo necesario
+6. recién ahí queda habilitado `/dashboard`
+
+Objetivo de esta tarea
+Implementar el flujo base de OAuth Tiendanube + persistencia mínima + guard de acceso al dashboard
+
+Alcance
+1. CTA pública “Conectar tienda”
+2. route handler para iniciar OAuth Tiendanube
+3. route handler callback Tiendanube
+4. persistencia mínima al volver del callback:
+   - organization
+   - organization_members
+   - store
+   - actualización de users.role si sigue aplicando
+5. guard para dashboard:
+   - usuario autenticado
+   - con acceso real por tienda conectada
+   - si no cumple, no entra
+6. CTA pública "Conectar tienda":
+- vive en app/(public)/conectar/page.tsx (ya existe, está vacío)
+- página simple con título, descripción breve y botón que inicia el OAuth
+- si no hay sesión → redirigir a /login con ?next=/conectar para volver después
+
+### Archivos a crear/modificar
+
+- app/(public)/conectar/page.tsx
+- app/api/tiendanube/connect/route.ts
+- app/api/tiendanube/callback/route.ts
+- lib/auth/get-current-membership.ts ← solo si falta o hay que ajustarlo
+- app/(dashboard)/dashboard/layout.tsx ← agregar guard de acceso real al dashboard
+
+Decisiones ya tomadas
+- usuarios arrancan iguales
+- pasan a merchant después de conectar tienda
+- dashboard solo para quienes tienen tienda
+- server components por defecto
+- server actions para mutaciones cuando corresponda
+- admin client solo backend seguro
+- no usar service role en frontend
+- código en inglés
+- UI en español
+
+Importante
+- no implementar todavía sync completo
+- no agregar lógica de trial/billing/permisos complejos
+- no meter checks pesados en layout sin necesidad
+- no inventar onboarding manual previo al OAuth
+
+Quiero en la respuesta
+1. archivos creados/modificados
+2. decisiones breves
+3. código o diff final
+4. confirmar `pnpm exec tsc --noEmit`
+
+Regla del guard de dashboard
+- usuario autenticado
+- membership existente
+- store conectada y no eliminada
+- si no cumple → redirect("/")
