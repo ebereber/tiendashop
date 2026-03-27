@@ -1,7 +1,6 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { getServerUser } from "@/lib/auth/get-server-user";
-import { buttonVariants } from "@/components/ui/button";
 import {
   Card,
   CardContent,

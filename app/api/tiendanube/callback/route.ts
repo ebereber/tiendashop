@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
+import { parseSignedOAuthState } from "@/lib/tiendanube/oauth-state";
+import { syncStoreProducts } from "@/lib/services/product-sync";
 
 // Tiendanube API response types
 interface TiendanubeTokenResponse {
@@ -62,11 +64,11 @@ export async function GET(request: NextRequest) {
   // Decode and validate state
   let userId: string;
   try {
-    const decoded = JSON.parse(
-      Buffer.from(state, "base64url").toString("utf-8")
-    );
-    userId = decoded.userId;
-    if (!userId) throw new Error("Missing userId in state");
+    const parsedState = parseSignedOAuthState(state);
+    if (!parsedState.valid) {
+      throw new Error(parsedState.error);
+    }
+    userId = parsedState.userId;
   } catch (err) {
     console.error("[Tiendanube OAuth] Invalid state:", err);
     return NextResponse.redirect(`${appUrl}/conectar?error=invalid_state`);
@@ -196,13 +198,29 @@ export async function GET(request: NextRequest) {
       .from("stores")
       .update({
         access_token: tokenData.access_token,
-        sync_status: "ok",
-        sync_error_message: null,
       })
       .eq("id", existingStore.id);
 
     if (updateError) {
       console.error("[Tiendanube OAuth] Token update failed:", updateError);
+    }
+
+    // Check if store needs initial sync (no products yet)
+    const { count: productsCount, error: productsCountError } = await supabaseAdmin
+      .from("products")
+      .select("id", { count: "exact", head: true })
+      .eq("store_id", existingStore.id);
+
+    if (productsCountError) {
+      console.error("[Tiendanube OAuth] Product count check failed:", productsCountError);
+    } else if ((productsCount ?? 0) === 0) {
+      // Execute initial sync
+      await syncStoreProducts({
+        supabase: supabaseAdmin,
+        storeId: existingStore.id,
+        tiendanubeStoreId,
+        accessToken: tokenData.access_token,
+      });
     }
 
     return NextResponse.redirect(`${appUrl}/dashboard`);
@@ -262,18 +280,22 @@ export async function GET(request: NextRequest) {
 
   // Create store
   const storeSlug = generateSlug(storeName);
-  const { error: storeError } = await supabaseAdmin.from("stores").insert({
-    organization_id: organization.id,
-    tiendanube_store_id: tiendanubeStoreId,
-    access_token: tokenData.access_token,
-    name: storeName,
-    slug: storeSlug,
-    domain,
-    country: storeData.country || "AR",
-    currency: storeData.main_currency || "ARS",
-  });
+  const { data: newStore, error: storeError } = await supabaseAdmin
+    .from("stores")
+    .insert({
+      organization_id: organization.id,
+      tiendanube_store_id: tiendanubeStoreId,
+      access_token: tokenData.access_token,
+      name: storeName,
+      slug: storeSlug,
+      domain,
+      country: storeData.country || "AR",
+      currency: storeData.main_currency || "ARS",
+    })
+    .select("id")
+    .single();
 
-  if (storeError) {
+  if (storeError || !newStore) {
     console.error("[Tiendanube OAuth] Store creation failed:", storeError);
     // Cleanup: delete membership and organization
     await supabaseAdmin
@@ -300,6 +322,14 @@ export async function GET(request: NextRequest) {
     storeId: tiendanubeStoreId,
     storeName,
     organizationId: organization.id,
+  });
+
+  // Execute initial product sync
+  await syncStoreProducts({
+    supabase: supabaseAdmin,
+    storeId: newStore.id,
+    tiendanubeStoreId,
+    accessToken: tokenData.access_token,
   });
 
   return NextResponse.redirect(`${appUrl}/dashboard`);

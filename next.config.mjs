@@ -1,4 +1,16 @@
 /** @type {import('next').NextConfig} */
-const nextConfig = {}
+// next.config.ts / next.config.mjs
+const nextConfig = {
+  experimental: {
+    serverActions: {
+      allowedOrigins: [
+        "localhost:3000",
+        "127.0.0.1:3000",
+        "7zp9cjdq-3000.brs.devtunnels.ms",
+        "*.devtunnels.ms",
+      ],
+    },
+  },
+};
 
 export default nextConfig
