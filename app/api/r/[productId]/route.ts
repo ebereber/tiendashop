@@ -113,7 +113,7 @@ export async function GET(
 
 function mapSourceType(
   from: string | null
-): "home" | "search" | "category" | "brand" | "store" | "saved" | null {
+): "home" | "search" | "category" | "brand" | "store" | "saved" | "product" | null {
   switch (from) {
     case "home":
       return "home";
@@ -127,6 +127,8 @@ function mapSourceType(
       return "store";
     case "saved":
       return "saved";
+    case "product":
+      return "product";
     default:
       return null;
   }

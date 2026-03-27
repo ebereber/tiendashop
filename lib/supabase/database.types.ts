@@ -719,13 +719,8 @@ export type Database = {
           publish_all: boolean | null
           refresh_token: string | null
           slug: string | null
-          sync_created_products: number | null
           sync_error_message: string | null
-          sync_failed_products: number | null
-          sync_processed_products: number | null
           sync_status: Database["public"]["Enums"]["sync_status"] | null
-          sync_total_products: number | null
-          sync_updated_products: number | null
           tiendanube_store_id: string | null
           updated_at: string | null
         }
@@ -743,13 +738,8 @@ export type Database = {
           publish_all?: boolean | null
           refresh_token?: string | null
           slug?: string | null
-          sync_created_products?: number | null
           sync_error_message?: string | null
-          sync_failed_products?: number | null
-          sync_processed_products?: number | null
           sync_status?: Database["public"]["Enums"]["sync_status"] | null
-          sync_total_products?: number | null
-          sync_updated_products?: number | null
           tiendanube_store_id?: string | null
           updated_at?: string | null
         }
@@ -767,13 +757,8 @@ export type Database = {
           publish_all?: boolean | null
           refresh_token?: string | null
           slug?: string | null
-          sync_created_products?: number | null
           sync_error_message?: string | null
-          sync_failed_products?: number | null
-          sync_processed_products?: number | null
           sync_status?: Database["public"]["Enums"]["sync_status"] | null
-          sync_total_products?: number | null
-          sync_updated_products?: number | null
           tiendanube_store_id?: string | null
           updated_at?: string | null
         }
@@ -809,12 +794,13 @@ export type Database = {
         | "external_image"
         | "description_too_short"
       redirect_source_type:
-        | "home"
         | "search"
         | "category"
         | "brand"
         | "store"
         | "saved"
+        | "home"
+        | "product"
       sync_status: "ok" | "error" | "stale" | "disabled" | "syncing"
       system_status: "visible" | "hidden" | "error"
       system_status_reason:
@@ -965,7 +951,15 @@ export const Constants = {
         "external_image",
         "description_too_short",
       ],
-      redirect_source_type: ["home", "search", "category", "brand", "store", "saved"],
+      redirect_source_type: [
+        "search",
+        "category",
+        "brand",
+        "store",
+        "saved",
+        "home",
+        "product",
+      ],
       sync_status: ["ok", "error", "stale", "disabled", "syncing"],
       system_status: ["visible", "hidden", "error"],
       system_status_reason: [

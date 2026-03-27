@@ -1,7 +1,94 @@
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentMembership } from "@/lib/auth/get-current-membership";
+import { cache } from "react";
 
 const PAGE_SIZE = 50;
+
+// --- Public product detail ---
+
+export interface ProductImage {
+  url: string;
+  position: number;
+}
+
+export interface ProductWithDetails {
+  id: string;
+  title: string;
+  description: string | null;
+  brand: string | null;
+  priceMin: number | null;
+  hasStock: boolean;
+  storeName: string;
+  storeSlug: string;
+  images: ProductImage[];
+}
+
+export const getPublicProductById = cache(async (id: string): Promise<ProductWithDetails | null> => {
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from("products")
+    .select(
+      `
+      id,
+      title,
+      description,
+      brand,
+      price_min,
+      has_stock,
+      stores!inner (
+        name,
+        slug,
+        deleted_at,
+        sync_status
+      ),
+      product_images (
+        url,
+        position
+      )
+    `
+    )
+    .eq("id", id)
+    .eq("merchant_status", "active")
+    .eq("system_status", "visible")
+    .eq("has_stock", true)
+    .gt("price_min", 0)
+    .is("stores.deleted_at", null)
+    .neq("stores.sync_status", "disabled")
+    .maybeSingle();
+
+  if (error) {
+    console.error("[Products] getPublicProductById error:", error);
+    return null;
+  }
+
+  if (!data) {
+    return null;
+  }
+
+  const store = data.stores as unknown as { name: string; slug: string };
+  const images = (data.product_images as { url: string; position: number }[]) ?? [];
+  const sortedImages = [...images].sort((a, b) => a.position - b.position);
+
+  // Must have at least one image
+  if (sortedImages.length === 0) {
+    return null;
+  }
+
+  return {
+    id: data.id,
+    title: data.title,
+    description: data.description,
+    brand: data.brand,
+    priceMin: data.price_min,
+    hasStock: data.has_stock,
+    storeName: store.name,
+    storeSlug: store.slug,
+    images: sortedImages,
+  };
+});
+
+// --- Dashboard products ---
 
 export interface ProductVariantListItem {
   id: string;
