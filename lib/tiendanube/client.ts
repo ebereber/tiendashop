@@ -1,8 +1,17 @@
-import type { TiendanubeProduct } from "./types";
+import type {
+  TiendanubeProduct,
+  TiendanubeWebhook,
+  TiendanubeWebhookEvent,
+} from "./types";
+import { sleep } from "./helpers";
 
 const TIENDANUBE_API_BASE = "https://api.tiendanube.com/v1";
 const USER_AGENT = "TiendaShop (support@tiendashop.com)";
 const PAGE_SIZE = 200;
+
+// Retry config for rate limiting
+const MAX_RETRIES = 3;
+const RETRY_BASE_DELAY_MS = 500;
 
 interface TiendanubeClientConfig {
   storeId: string;
@@ -11,7 +20,9 @@ interface TiendanubeClientConfig {
 
 interface TiendanubeRequestOptions {
   endpoint: string;
+  method?: "GET" | "POST" | "DELETE";
   params?: Record<string, string>;
+  body?: unknown;
 }
 
 interface TiendanubeResponse<T> {
@@ -28,27 +39,55 @@ export class TiendanubeClient {
     this.accessToken = config.accessToken;
   }
 
-  private async request<T>(
-    options: TiendanubeRequestOptions
-  ): Promise<TiendanubeResponse<T>> {
-    const url = new URL(
-      `${TIENDANUBE_API_BASE}/${this.storeId}/${options.endpoint}`
-    );
+  private buildUrl(endpoint: string, params?: Record<string, string>): URL {
+    const url = new URL(`${TIENDANUBE_API_BASE}/${this.storeId}/${endpoint}`);
 
-    if (options.params) {
-      Object.entries(options.params).forEach(([key, value]) => {
+    if (params) {
+      Object.entries(params).forEach(([key, value]) => {
         url.searchParams.set(key, value);
       });
     }
 
+    return url;
+  }
+
+  private buildHeaders(hasBody: boolean = false): Record<string, string> {
+    const headers: Record<string, string> = {
+      Authentication: `bearer ${this.accessToken}`,
+      "User-Agent": USER_AGENT,
+      Accept: "application/json",
+    };
+
+    if (hasBody) {
+      headers["Content-Type"] = "application/json";
+    }
+
+    return headers;
+  }
+
+  private async request<T>(
+    options: TiendanubeRequestOptions,
+    attempt: number = 0
+  ): Promise<TiendanubeResponse<T>> {
+    const url = this.buildUrl(options.endpoint, options.params);
+    const headers = this.buildHeaders(Boolean(options.body));
+
     try {
       const response = await fetch(url.toString(), {
-        headers: {
-          Authentication: `bearer ${this.accessToken}`,
-          "User-Agent": USER_AGENT,
-          Accept: "application/json",
-        },
+        method: options.method ?? "GET",
+        headers,
+        body: options.body ? JSON.stringify(options.body) : undefined,
       });
+
+      // Handle rate limiting with retry
+      if (response.status === 429 && attempt < MAX_RETRIES) {
+        const delay = RETRY_BASE_DELAY_MS * Math.pow(2, attempt);
+        console.warn(
+          `[Tiendanube] Rate limited, retry ${attempt + 1}/${MAX_RETRIES} in ${delay}ms`
+        );
+        await sleep(delay);
+        return this.request<T>(options, attempt + 1);
+      }
 
       const responseText = await response.text();
 
@@ -102,6 +141,105 @@ export class TiendanubeClient {
     }
 
     return { data: allProducts, error: null };
+  }
+
+  async getProduct(
+    productId: number | string
+  ): Promise<TiendanubeResponse<TiendanubeProduct>> {
+    return this.request<TiendanubeProduct>({
+      endpoint: `products/${productId}`,
+    });
+  }
+
+  async listWebhooks(): Promise<TiendanubeResponse<TiendanubeWebhook[]>> {
+    return this.request<TiendanubeWebhook[]>({
+      endpoint: "webhooks",
+    });
+  }
+
+  async registerWebhooks(
+    webhookUrl: string
+  ): Promise<{ success: boolean; errors: string[] }> {
+    const events: TiendanubeWebhookEvent[] = [
+      "product/created",
+      "product/updated",
+      "product/deleted",
+    ];
+
+    // Get existing webhooks to avoid duplicates
+    const existingResult = await this.listWebhooks();
+
+    const existingWebhooks = existingResult.data ?? [];
+    const existingEvents = new Set(
+      existingWebhooks
+        .filter((w) => w.url === webhookUrl)
+        .map((w) => w.event)
+    );
+
+    const errors: string[] = [];
+
+    for (const event of events) {
+      // Skip if already registered for this URL
+      if (existingEvents.has(event)) {
+        continue;
+      }
+
+      const endpoint = this.buildUrl("webhooks").toString();
+      const body = { event, url: webhookUrl };
+
+      console.log("[Tiendanube Webhooks] create request", {
+        storeId: this.storeId,
+        endpoint,
+        body,
+      });
+
+      try {
+        const response = await fetch(endpoint, {
+          method: "POST",
+          headers: this.buildHeaders(true),
+          body: JSON.stringify(body),
+        });
+
+        const responseText = await response.text();
+        let parsedResponse: unknown = responseText;
+        try {
+          parsedResponse = JSON.parse(responseText);
+        } catch {
+          // Keep raw text when response is not JSON
+        }
+
+        if (!response.ok) {
+          console.error("[Tiendanube Webhooks] create failed", {
+            storeId: this.storeId,
+            event,
+            webhookUrl,
+            status: response.status,
+            body: responseText,
+          });
+          errors.push(`${event}: HTTP ${response.status}`);
+          continue;
+        }
+
+        console.log("[Tiendanube Webhooks] create response", {
+          storeId: this.storeId,
+          event,
+          status: response.status,
+          response: parsedResponse,
+        });
+      } catch (err) {
+        const message =
+          err instanceof Error ? err.message : "Error de conexion webhook";
+        console.error("[Tiendanube Webhooks] create request error", {
+          storeId: this.storeId,
+          event,
+          webhookUrl,
+          error: message,
+        });
+        errors.push(`${event}: ${message}`);
+      }
+    }
+
+    return { success: errors.length === 0, errors };
   }
 }
 

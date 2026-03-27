@@ -85,3 +85,23 @@ export interface TiendanubePaginatedResponse<T> {
     "x-total-count"?: string;
   };
 }
+
+// Webhook types
+export type TiendanubeWebhookEvent =
+  | "product/created"
+  | "product/updated"
+  | "product/deleted";
+
+export interface TiendanubeWebhook {
+  id: number;
+  event: TiendanubeWebhookEvent;
+  url: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface TiendanubeWebhookPayload {
+  store_id: number;
+  event: TiendanubeWebhookEvent;
+  id: number; // product_id for product events
+}

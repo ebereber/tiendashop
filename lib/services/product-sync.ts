@@ -200,6 +200,111 @@ export async function syncStoreProducts(params: SyncParams): Promise<SyncResult>
   };
 }
 
+// --- Single product sync (used by webhooks) ---
+
+export interface SingleProductSyncResult {
+  success: boolean;
+  productId: string | null;
+  isNew: boolean;
+  error: string | null;
+}
+
+export async function syncSingleProduct(
+  supabase: SupabaseClient<Database>,
+  storeId: string,
+  tnProduct: TiendanubeProduct
+): Promise<SingleProductSyncResult> {
+  try {
+    const upsertResult = await upsertProduct(supabase, storeId, tnProduct);
+
+    if (!upsertResult.productId) {
+      return {
+        success: false,
+        productId: null,
+        isNew: false,
+        error: "Upsert fallido",
+      };
+    }
+
+    // Delete and recreate variants
+    const { error: deleteVariantsError } = await supabase
+      .from("product_variants")
+      .delete()
+      .eq("product_id", upsertResult.productId);
+
+    if (deleteVariantsError) {
+      console.error("[Sync] Variants delete error:", deleteVariantsError);
+      return {
+        success: false,
+        productId: upsertResult.productId,
+        isNew: upsertResult.isNew,
+        error: "Error al borrar variantes",
+      };
+    }
+
+    const variantResult = await insertVariants(
+      supabase,
+      upsertResult.productId,
+      tnProduct
+    );
+    if (variantResult.error) {
+      return {
+        success: false,
+        productId: upsertResult.productId,
+        isNew: upsertResult.isNew,
+        error: variantResult.error,
+      };
+    }
+
+    // Delete and recreate images
+    const { error: deleteImagesError } = await supabase
+      .from("product_images")
+      .delete()
+      .eq("product_id", upsertResult.productId);
+
+    if (deleteImagesError) {
+      console.error("[Sync] Images delete error:", deleteImagesError);
+      return {
+        success: false,
+        productId: upsertResult.productId,
+        isNew: upsertResult.isNew,
+        error: "Error al borrar imagenes",
+      };
+    }
+
+    const imageResult = await insertImages(
+      supabase,
+      upsertResult.productId,
+      tnProduct
+    );
+    if (imageResult.error) {
+      return {
+        success: false,
+        productId: upsertResult.productId,
+        isNew: upsertResult.isNew,
+        error: imageResult.error,
+      };
+    }
+
+    return {
+      success: true,
+      productId: upsertResult.productId,
+      isNew: upsertResult.isNew,
+      error: null,
+    };
+  } catch (err) {
+    console.error("[Sync] syncSingleProduct error:", err);
+    return {
+      success: false,
+      productId: null,
+      isNew: false,
+      error: "Error inesperado",
+    };
+  }
+}
+
+// --- Internal helpers ---
+
 interface UpsertProductResult {
   productId: string | null;
   isNew: boolean;
