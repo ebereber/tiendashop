@@ -2,10 +2,9 @@
 
 import { getServerUser } from "@/lib/auth/get-server-user";
 import { getCurrentMembership } from "@/lib/auth/get-current-membership";
-import { syncStoreProducts, type SyncResult } from "@/lib/services/product-sync";
+import { syncStoreProducts } from "@/lib/services/product-sync";
+import type { SyncResult } from "@/lib/services/product-sync";
 import { supabaseAdmin } from "@/lib/supabase/admin";
-
-export type { SyncResult };
 
 export async function syncProducts(): Promise<SyncResult> {
   const user = await getServerUser();

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback, useEffect } from "react";
-import { Settings2, FileSearch, RefreshCw } from "lucide-react";
+import { Settings2, FileSearch, RefreshCw, Loader2, AlertCircle, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import {
@@ -21,12 +21,31 @@ import {
 } from "@/components/ui/dialog";
 import { syncProducts } from "@/lib/actions/tiendanube-sync";
 import { getSyncStatus, type SyncStatus } from "@/lib/actions/sync-status";
+import {
+  getProductDiscrepancies,
+  type DiscrepancyReport,
+  type DiscrepancyType,
+} from "@/lib/actions/product-discrepancies";
+
+const DISCREPANCY_LABELS: Record<DiscrepancyType, string> = {
+  missing_local: "Falta en local",
+  missing_remote: "Falta en Tiendanube",
+  price_mismatch: "Precio diferente",
+  stock_mismatch: "Stock diferente",
+  title_mismatch: "Titulo diferente",
+};
 
 export function ProductToolsMenu() {
   const [discrepancyOpen, setDiscrepancyOpen] = useState(false);
   const [resyncOpen, setResyncOpen] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncStatus, setSyncStatus] = useState<SyncStatus | null>(null);
+
+  // Discrepancy report state
+  const [discrepancyReport, setDiscrepancyReport] = useState<DiscrepancyReport | null>(null);
+  const [isLoadingDiscrepancies, setIsLoadingDiscrepancies] = useState(false);
+  const [isRepairingAll, setIsRepairingAll] = useState(false);
+  const [hasStartedReport, setHasStartedReport] = useState(false);
 
   const progress =
     syncStatus && syncStatus.totalProducts > 0
@@ -40,6 +59,36 @@ export function ProductToolsMenu() {
     setSyncStatus(status);
     return status;
   }, []);
+
+  const fetchDiscrepancies = useCallback(async () => {
+    setHasStartedReport(true);
+    setIsLoadingDiscrepancies(true);
+    setDiscrepancyReport(null);
+    try {
+      const report = await getProductDiscrepancies();
+      setDiscrepancyReport(report);
+    } finally {
+      setIsLoadingDiscrepancies(false);
+    }
+  }, []);
+
+  const handleRepairAll = async () => {
+    setIsRepairingAll(true);
+    try {
+      await syncProducts();
+      await fetchDiscrepancies();
+    } finally {
+      setIsRepairingAll(false);
+    }
+  };
+
+  // Reset state when dialog closes
+  useEffect(() => {
+    if (!discrepancyOpen) {
+      setHasStartedReport(false);
+      setDiscrepancyReport(null);
+    }
+  }, [discrepancyOpen]);
 
   // Polling while syncing
   useEffect(() => {
@@ -93,24 +142,115 @@ export function ProductToolsMenu() {
 
       {/* Discrepancy Report Dialog */}
       <Dialog open={discrepancyOpen} onOpenChange={setDiscrepancyOpen}>
-        <DialogContent>
+        <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Reporte de discrepancias</DialogTitle>
             <DialogDescription>
-              Aca vas a poder detectar diferencias entre tu catalogo local y
-              Tiendanube.
+              Diferencias entre tu catalogo local y Tiendanube.
             </DialogDescription>
           </DialogHeader>
-          <div className="py-4">
-            <p className="text-sm text-muted-foreground">
-              Proximamente vas a poder revisar y corregir discrepancias por
-              producto o en lote.
-            </p>
+
+          <div className="py-2">
+            {/* Initial state - before starting */}
+            {!hasStartedReport && (
+              <div className="space-y-3">
+                <p className="text-sm text-muted-foreground">
+                  Este reporte compara tu catalogo local contra Tiendanube para detectar
+                  diferencias en precios, stock, titulos y productos faltantes.
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  El analisis puede tardar unos segundos dependiendo de la cantidad de productos.
+                </p>
+              </div>
+            )}
+
+            {/* Loading state */}
+            {isLoadingDiscrepancies && (
+              <div className="flex flex-col items-center gap-3 py-8">
+                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                <p className="text-sm text-muted-foreground">Analizando catalogo...</p>
+              </div>
+            )}
+
+            {/* Error state */}
+            {hasStartedReport && !isLoadingDiscrepancies && discrepancyReport?.error && (
+              <div className="flex items-center gap-2 rounded-md bg-red-50 p-3 text-sm text-red-800 dark:bg-red-950 dark:text-red-200">
+                <AlertCircle className="h-4 w-4 shrink-0" />
+                <span>{discrepancyReport.error}</span>
+              </div>
+            )}
+
+            {/* Empty state */}
+            {hasStartedReport &&
+              !isLoadingDiscrepancies &&
+              discrepancyReport &&
+              !discrepancyReport.error &&
+              discrepancyReport.discrepancies.length === 0 && (
+                <div className="flex flex-col items-center gap-2 py-6 text-center">
+                  <CheckCircle2 className="h-8 w-8 text-green-600" />
+                  <p className="text-sm font-medium">No se detectaron discrepancias</p>
+                  <p className="text-xs text-muted-foreground">
+                    {discrepancyReport.localCount} productos locales,{" "}
+                    {discrepancyReport.remoteCount} en Tiendanube
+                  </p>
+                </div>
+              )}
+
+            {/* Discrepancy list */}
+            {hasStartedReport &&
+              !isLoadingDiscrepancies &&
+              discrepancyReport &&
+              !discrepancyReport.error &&
+              discrepancyReport.discrepancies.length > 0 && (
+                <div className="space-y-3">
+                  <p className="text-xs text-muted-foreground">
+                    {discrepancyReport.discrepancies.length} discrepancia
+                    {discrepancyReport.discrepancies.length !== 1 ? "s" : ""} detectada
+                    {discrepancyReport.discrepancies.length !== 1 ? "s" : ""}
+                  </p>
+                  <ul className="max-h-64 space-y-2 overflow-y-auto">
+                    {discrepancyReport.discrepancies.map((d, i) => (
+                      <li
+                        key={`${d.tiendanubeProductId}-${d.type}-${i}`}
+                        className="rounded-md border p-2 text-sm"
+                      >
+                        <p className="font-medium truncate">{d.productTitle}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {DISCREPANCY_LABELS[d.type]}
+                          {d.localValue && d.remoteValue && (
+                            <span>
+                              : {d.localValue} → {d.remoteValue}
+                            </span>
+                          )}
+                        </p>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
           </div>
+
           <DialogFooter>
             <DialogClose render={<Button variant="outline" />}>
               Cerrar
             </DialogClose>
+            {/* Start button - before analysis */}
+            {!hasStartedReport && (
+              <Button onClick={fetchDiscrepancies}>
+                Iniciar reporte
+              </Button>
+            )}
+            {/* Repair button - after analysis with discrepancies */}
+            {hasStartedReport &&
+              !isLoadingDiscrepancies &&
+              discrepancyReport &&
+              !discrepancyReport.error &&
+              discrepancyReport.discrepancies.length > 0 && (
+                <Button onClick={handleRepairAll} disabled={isRepairingAll}>
+                  {isRepairingAll && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  Reparar todo
+                </Button>
+              )}
           </DialogFooter>
         </DialogContent>
       </Dialog>
