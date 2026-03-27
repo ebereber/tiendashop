@@ -232,6 +232,11 @@ export async function GET(request: NextRequest) {
       webhookUrl,
     });
     const webhookResult = await client.registerWebhooks(webhookUrl);
+    console.log("[Tiendanube OAuth] registerWebhooks result", {
+      tiendanubeStoreId,
+      webhookUrl,
+      webhookResult,
+    });
     if (!webhookResult.success) {
       console.error("[Tiendanube OAuth] Webhook re-registration failed:", webhookResult.errors);
     } else {
@@ -364,6 +369,11 @@ export async function GET(request: NextRequest) {
     webhookUrl,
   });
   const webhookResult = await client.registerWebhooks(webhookUrl);
+  console.log("[Tiendanube OAuth] registerWebhooks result", {
+    tiendanubeStoreId,
+    webhookUrl,
+    webhookResult,
+  });
   if (!webhookResult.success) {
     console.error("[Tiendanube OAuth] Webhook registration failed:", webhookResult.errors);
     // Continue anyway - manual sync is fallback

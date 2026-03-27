@@ -181,6 +181,11 @@ export class TiendanubeClient {
     for (const event of events) {
       // Skip if already registered for this URL
       if (existingEvents.has(event)) {
+        console.log("[Tiendanube Webhooks] create skipped (already exists)", {
+          storeId: this.storeId,
+          event,
+          webhookUrl,
+        });
         continue;
       }
 
