@@ -310,12 +310,14 @@ export type Database = {
       }
       products: {
         Row: {
+          auto_category_id: string | null
           brand: string | null
           created_at: string
           description: string | null
           handle: string | null
           has_stock: boolean
           id: string
+          manual_category_id: string | null
           merchant_status: Database["public"]["Enums"]["merchant_status"]
           price_max: number | null
           price_min: number | null
@@ -331,15 +333,18 @@ export type Database = {
           tiendanube_product_id: string
           title: string
           title_normalized: string | null
+          tn_category_raw: string | null
           updated_at: string
         }
         Insert: {
+          auto_category_id?: string | null
           brand?: string | null
           created_at?: string
           description?: string | null
           handle?: string | null
           has_stock?: boolean
           id?: string
+          manual_category_id?: string | null
           merchant_status?: Database["public"]["Enums"]["merchant_status"]
           price_max?: number | null
           price_min?: number | null
@@ -355,15 +360,18 @@ export type Database = {
           tiendanube_product_id: string
           title: string
           title_normalized?: string | null
+          tn_category_raw?: string | null
           updated_at?: string
         }
         Update: {
+          auto_category_id?: string | null
           brand?: string | null
           created_at?: string
           description?: string | null
           handle?: string | null
           has_stock?: boolean
           id?: string
+          manual_category_id?: string | null
           merchant_status?: Database["public"]["Enums"]["merchant_status"]
           price_max?: number | null
           price_min?: number | null
@@ -379,9 +387,24 @@ export type Database = {
           tiendanube_product_id?: string
           title?: string
           title_normalized?: string | null
+          tn_category_raw?: string | null
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "products_auto_category_id_fkey"
+            columns: ["auto_category_id"]
+            isOneToOne: false
+            referencedRelation: "categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "products_manual_category_id_fkey"
+            columns: ["manual_category_id"]
+            isOneToOne: false
+            referencedRelation: "categories"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "products_store_id_fkey"
             columns: ["store_id"]

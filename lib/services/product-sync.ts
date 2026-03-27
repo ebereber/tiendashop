@@ -2,6 +2,18 @@ import { SupabaseClient } from "@supabase/supabase-js";
 import { createTiendanubeClient } from "@/lib/tiendanube/client";
 import type { TiendanubeProduct } from "@/lib/tiendanube/types";
 import type { Database } from "@/lib/supabase/database.types";
+import { assignCategory } from "@/lib/categories/assign-category";
+
+// Category cache type
+interface CategoryCache {
+  id: string;
+  slug: string;
+}
+
+// Existing product data for manual category preservation
+interface ExistingProductData {
+  manual_category_id: string | null;
+}
 
 export interface SyncResult {
   success: boolean;
@@ -66,6 +78,42 @@ export async function syncStoreProducts(params: SyncParams): Promise<SyncResult>
   let failedProducts = 0;
   const errorMessages: string[] = [];
 
+  // Load category cache (once at start, not per product)
+  const { data: categoriesData, error: categoriesError } = await supabase
+    .from("categories")
+    .select("id, slug");
+  if (categoriesError) {
+    console.error("[Sync] Categories cache load error:", categoriesError);
+    await supabase
+      .from("stores")
+      .update({
+        sync_status: "error",
+        sync_error_message: `Error al cargar categorias: ${categoriesError.message}`,
+      })
+      .eq("id", storeId);
+
+    return {
+      success: false,
+      productsProcessed: 0,
+      variantsProcessed: 0,
+      imagesProcessed: 0,
+      error: `Error al cargar categorias: ${categoriesError.message}`,
+    };
+  }
+  const categoryCache: CategoryCache[] = categoriesData ?? [];
+
+  // Load existing products to preserve manual_category_id
+  const { data: existingProductsData } = await supabase
+    .from("products")
+    .select("tiendanube_product_id, manual_category_id")
+    .eq("store_id", storeId);
+  const existingProductsMap = new Map<string, ExistingProductData>(
+    (existingProductsData ?? []).map((p) => [
+      p.tiendanube_product_id,
+      { manual_category_id: p.manual_category_id },
+    ])
+  );
+
   // Update total count
   await supabase
     .from("stores")
@@ -94,7 +142,12 @@ export async function syncStoreProducts(params: SyncParams): Promise<SyncResult>
   // Process each product
   for (const tnProduct of tiendanubeProducts) {
     try {
-      const upsertResult = await upsertProduct(supabase, storeId, tnProduct);
+      const upsertResult = await upsertProduct(
+        supabase,
+        storeId,
+        tnProduct,
+        categoryCache
+      );
 
       if (!upsertResult.productId) {
         registerError(`Producto ${tnProduct.id}: upsert fallido`);
@@ -107,6 +160,25 @@ export async function syncStoreProducts(params: SyncParams): Promise<SyncResult>
         createdProducts++;
       } else {
         updatedProducts++;
+      }
+
+      // Assign categories (after successful upsert)
+      const existingData = existingProductsMap.get(String(tnProduct.id));
+      try {
+        await assignProductCategories(
+          supabase,
+          upsertResult.productId,
+          upsertResult.autoCategoryId,
+          existingData?.manual_category_id ?? null,
+          upsertResult.subcategoryId
+        );
+      } catch (err) {
+        const message =
+          err instanceof Error ? err.message : "error al asignar categorias";
+        registerError(`Producto ${tnProduct.id}: ${message}`);
+        productsProcessed++;
+        await updateProgress();
+        continue;
       }
 
       // Delete and recreate variants
@@ -215,7 +287,35 @@ export async function syncSingleProduct(
   tnProduct: TiendanubeProduct
 ): Promise<SingleProductSyncResult> {
   try {
-    const upsertResult = await upsertProduct(supabase, storeId, tnProduct);
+    // Load category cache
+    const { data: categoriesData, error: categoriesError } = await supabase
+      .from("categories")
+      .select("id, slug");
+    if (categoriesError) {
+      console.error("[Sync] Categories cache load error:", categoriesError);
+      return {
+        success: false,
+        productId: null,
+        isNew: false,
+        error: `Error al cargar categorias: ${categoriesError.message}`,
+      };
+    }
+    const categoryCache: CategoryCache[] = categoriesData ?? [];
+
+    // Load existing product data for manual category
+    const { data: existingProduct } = await supabase
+      .from("products")
+      .select("manual_category_id")
+      .eq("store_id", storeId)
+      .eq("tiendanube_product_id", String(tnProduct.id))
+      .maybeSingle();
+
+    const upsertResult = await upsertProduct(
+      supabase,
+      storeId,
+      tnProduct,
+      categoryCache
+    );
 
     if (!upsertResult.productId) {
       return {
@@ -223,6 +323,26 @@ export async function syncSingleProduct(
         productId: null,
         isNew: false,
         error: "Upsert fallido",
+      };
+    }
+
+    // Assign categories
+    try {
+      await assignProductCategories(
+        supabase,
+        upsertResult.productId,
+        upsertResult.autoCategoryId,
+        existingProduct?.manual_category_id ?? null,
+        upsertResult.subcategoryId
+      );
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : "error al asignar categorias";
+      return {
+        success: false,
+        productId: upsertResult.productId,
+        isNew: upsertResult.isNew,
+        error: message,
       };
     }
 
@@ -308,12 +428,15 @@ export async function syncSingleProduct(
 interface UpsertProductResult {
   productId: string | null;
   isNew: boolean;
+  autoCategoryId: string | null;
+  subcategoryId: string | null;
 }
 
 async function upsertProduct(
   supabase: SupabaseClient<Database>,
   storeId: string,
-  tnProduct: TiendanubeProduct
+  tnProduct: TiendanubeProduct,
+  categoryCache: CategoryCache[]
 ): Promise<UpsertProductResult> {
   const title = extractLocalizedText(tnProduct.name);
   const description = extractLocalizedText(tnProduct.description);
@@ -331,6 +454,16 @@ async function upsertProduct(
   const totalStock = tnProduct.variants.reduce((sum, v) => {
     return sum + (v.stock ?? 0);
   }, 0);
+
+  // Assign category (always recalculate auto)
+  const categoryAssignment = assignCategory(tnProduct);
+  const autoCategoryId =
+    categoryCache.find((c) => c.slug === categoryAssignment.categorySlug)?.id ??
+    null;
+  const subcategoryId = categoryAssignment.subcategorySlug
+    ? categoryCache.find((c) => c.slug === categoryAssignment.subcategorySlug)
+        ?.id ?? null
+    : null;
 
   // Check if product exists
   const { data: existing } = await supabase
@@ -357,6 +490,9 @@ async function upsertProduct(
     system_status_reason: null,
     system_status_detail: null,
     synced_at: new Date().toISOString(),
+    // Category fields (auto always updated, manual never touched)
+    auto_category_id: autoCategoryId,
+    tn_category_raw: categoryAssignment.tnCategoryRaw ?? null,
   };
 
   const { data, error } = await supabase
@@ -369,10 +505,64 @@ async function upsertProduct(
 
   if (error) {
     console.error("[Sync] Product upsert error:", error);
-    return { productId: null, isNew: false };
+    return { productId: null, isNew: false, autoCategoryId: null, subcategoryId: null };
   }
 
-  return { productId: data.id, isNew };
+  return { productId: data.id, isNew, autoCategoryId, subcategoryId };
+}
+
+async function assignProductCategories(
+  supabase: SupabaseClient<Database>,
+  productId: string,
+  autoCategoryId: string | null,
+  manualCategoryId: string | null,
+  subcategoryId: string | null
+): Promise<void> {
+  // Effective category: manual takes precedence over auto
+  const effectiveCategoryId = manualCategoryId ?? autoCategoryId;
+
+  if (!effectiveCategoryId) {
+    return;
+  }
+
+  // Delete existing category assignments
+  const { error: deleteError } = await supabase
+    .from("product_categories")
+    .delete()
+    .eq("product_id", productId);
+  if (deleteError) {
+    throw new Error(`error al borrar categorias: ${deleteError.message}`);
+  }
+
+  // Insert primary category
+  const categoriesToInsert: Array<{
+    product_id: string;
+    category_id: string;
+    is_primary: boolean;
+  }> = [
+    {
+      product_id: productId,
+      category_id: effectiveCategoryId,
+      is_primary: true,
+    },
+  ];
+
+  // Insert subcategory only when using auto category (never mix manual + auto subcategory)
+  if (!manualCategoryId && subcategoryId && subcategoryId !== effectiveCategoryId) {
+    categoriesToInsert.push({
+      product_id: productId,
+      category_id: subcategoryId,
+      is_primary: false,
+    });
+  }
+
+  const { error } = await supabase
+    .from("product_categories")
+    .insert(categoriesToInsert);
+
+  if (error) {
+    throw new Error(`error al insertar categorias: ${error.message}`);
+  }
 }
 
 async function insertVariants(
