@@ -72,7 +72,7 @@ export default async function BuscarPage({ searchParams }: Props) {
               )}
             </div>
           ) : (
-            <ProductGrid products={products} source="search" query={query || undefined} />
+            <ProductGrid products={products} />
           )}
         </div>
       </section>

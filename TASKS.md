@@ -15,9 +15,9 @@ Cada task es un módulo — cuando termina, algo nuevo funciona end-to-end.
 - [x] TASK-06 — Sync de productos 
 - [x] TASK-07 - Mejorar la UX del sync inicial/manual de productos 
 - [x] TASK-08 — Dashboard productos
-- [ ] **TASK-09-10 — Home público** ← actual
-- [ ] TASK-10 — Búsqueda pública
-- [ ] TASK-11 — Redirect tracking
+- [x] TASK-09-10 — Home público
+- [ ] **TASK-11 — Implementar páginas de entidad públicas: tienda y producto.** ← actual
+
 
 ---
 
@@ -764,5 +764,190 @@ app/api/r/[productId]/route.ts            ← redirect tracking (si no existe)
 
 - no refactor de lo que ya funciona
 - no tocar sync ni dashboard
+- cambios chicos y auditables
+- no inventar features fuera del alcance
+
+---
+
+## TASK 11 Implementar páginas de entidad públicas: tienda y producto.
+
+
+
+---
+
+## Objetivo
+
+Crear las páginas públicas de tienda individual y producto individual.
+Dependen del catálogo global (home + búsqueda) que ya está funcionando.
+
+---
+
+## Contexto
+
+- Productos, variantes e imágenes ya están en DB
+- Filtros públicos ya definidos en `lib/services/search.ts`:
+  - `merchant_status = 'active'`
+  - `system_status = 'visible'`
+  - `has_stock = true`
+  - `price_min > 0`
+  - al menos una imagen
+  - store activa
+- Reutilizar los mismos filtros en estas páginas — no duplicar lógica
+- No llamar a la API de Tiendanube — solo leer DB local
+
+---
+
+## Rutas
+
+- `/tienda/[slug]` → catálogo de una tienda específica
+- `/producto/[id]` → detalle de un producto
+
+---
+
+## Alcance
+
+### 1. Página de tienda `/tienda/[slug]`
+
+Mostrar:
+- nombre de la tienda
+- dominio como link externo con `target="_blank" rel="noopener noreferrer"`
+- grilla de productos de esa tienda
+
+Productos:
+- mismos filtros públicos que home/búsqueda
+- ordenados por `created_at desc`
+- límite de 48 productos
+- reutilizar `ProductCard` y `ProductGrid` con `source="store"`
+
+Metadata dinámica:
+- `<title>` con nombre de la tienda
+- `<description>` simple
+
+Si la tienda no existe o está inactiva → `notFound()`
+
+### 2. Página de producto `/producto/[id]`
+
+Mostrar:
+- nombre del producto
+- marca (si existe)
+- precio desde `price_min` — no traer variantes, ya está calculado
+- stock desde `has_stock` — no traer variantes, ya está calculado
+- galería de imágenes (todas las de `product_images` ordenadas por `position asc`)
+- nombre de la tienda con link a `/tienda/[slug]`
+- botón "Comprar" → `/api/r/[productId]?from=product&pos=0`
+
+Si el producto no existe o no cumple filtros públicos → `notFound()`
+
+Metadata dinámica:
+- `<title>` con nombre del producto
+- `<description>` con descripción truncada si existe
+
+---
+
+## Backend
+
+### `lib/services/stores.ts`
+
+Dos funciones separadas:
+
+```ts
+getStoreBySlug(slug: string): Promise<Store | null>
+```
+- buscar store por `slug`
+- validar que `deleted_at IS NULL` y `sync_status != 'disabled'`
+- traer solo campos de la tienda — sin productos
+
+```ts
+getPublicProductsByStoreId(storeId: string, limit?: number): Promise<ProductWithStore[]>
+```
+- traer productos de esa store con los mismos filtros públicos
+- join con `product_images` para imagen principal (`position asc limit 1`)
+- no hacer N+1
+- límite default: 48
+
+### `lib/services/products.ts`
+
+```ts
+getPublicProductById(id: string): Promise<ProductWithDetails | null>
+```
+
+Debe:
+- buscar producto por `id`
+- aplicar mismos filtros públicos
+- join con `stores` para nombre y slug
+- join con `product_images` todas, ordenadas por `position asc`
+- NO traer `product_variants` — usar `price_min` y `has_stock` directo desde `products`
+- retornar `null` si no cumple filtros
+
+---
+
+## UI
+
+- reutilizar `ProductCard` y `ProductGrid` donde aplique
+- leer `.agents/skills/frontend-design/SKILL.md` antes de implementar
+- textos en español
+- sin animaciones ni transiciones
+- sin diseño complejo — funcional y limpio
+
+### Estados necesarios
+
+- **not found**: usar `notFound()` de Next.js
+- **empty** (tienda sin productos visibles): "Esta tienda no tiene productos disponibles por el momento"
+
+---
+
+## SEO
+
+- `generateMetadata` en ambas páginas
+- `generateStaticParams` NO — SSR con cache
+- URLs limpias: `/tienda/nombre-tienda`, `/producto/uuid`
+
+---
+
+## No hacer
+
+- carrito, checkout, pagos
+- variantes seleccionables — mostrar solo `price_min`
+- reviews o comentarios
+- productos relacionados
+- infinite scroll o paginación — límite fijo de 48
+- compartir en redes
+- favoritos
+
+---
+
+## Skills a usar antes de implementar
+
+- Leer `.agents/skills/nextjs-best-practices/SKILL.md`
+- Leer `.agents/skills/frontend-design/SKILL.md`
+- Usar Context7 MCP para documentación actualizada de Next.js
+
+---
+
+## Archivos a crear/modificar
+
+```
+app/(public)/tienda/[slug]/page.tsx       ← página de tienda
+app/(public)/producto/[id]/page.tsx       ← página de producto
+lib/services/stores.ts                    ← getStoreBySlug + getPublicProductsByStoreId
+lib/services/products.ts                  ← getPublicProductById
+```
+
+---
+
+## Output esperado
+
+1. archivos creados/modificados
+2. decisiones breves
+3. código o diff por archivo
+4. confirmar `pnpm exec tsc --noEmit`
+
+---
+
+## Reglas
+
+- no duplicar filtros públicos — extraer a constante compartida si hace falta
+- no tocar sync ni dashboard
+- no refactor de lo que ya funciona
 - cambios chicos y auditables
 - no inventar features fuera del alcance

@@ -43,7 +43,7 @@ export default async function HomePage() {
               No hay productos disponibles todavia.
             </p>
           ) : (
-            <ProductGrid products={products} source="home" />
+            <ProductGrid products={products} />
           )}
         </div>
       </section>

@@ -1,32 +1,23 @@
+import Link from "next/link";
 import Image from "next/image";
 import { isAllowedImageHost } from "@/lib/images/allowed-hosts";
 import type { ProductWithStore } from "@/lib/services/search";
 
 interface ProductCardProps {
   product: ProductWithStore;
-  source: "home" | "search" | "store" | "category";
-  query?: string;
-  position: number;
 }
 
-export function ProductCard({
-  product,
-  source,
-  query,
-  position,
-}: ProductCardProps) {
+export function ProductCard({ product }: ProductCardProps) {
   const { id, title, priceMin, storeName, imageUrl } = product;
 
-  // Build redirect URL with tracking params
-  const redirectUrl = buildRedirectUrl(id, source, query, position);
-
-  const formattedPrice = priceMin != null && priceMin > 0
-    ? `$${priceMin.toLocaleString("es-AR")}`
-    : null;
+  const formattedPrice =
+    priceMin != null && priceMin > 0
+      ? `$${priceMin.toLocaleString("es-AR")}`
+      : null;
 
   return (
-    <a
-      href={redirectUrl}
+    <Link
+      href={`/producto/${id}`}
       className="group block overflow-hidden rounded-lg border bg-card transition-colors hover:border-foreground/20"
     >
       <div className="relative aspect-square bg-muted">
@@ -62,21 +53,6 @@ export function ProductCard({
         )}
         <p className="mt-1 text-xs text-muted-foreground">{storeName}</p>
       </div>
-    </a>
+    </Link>
   );
-}
-
-function buildRedirectUrl(
-  productId: string,
-  source: "home" | "search" | "store" | "category",
-  query?: string,
-  position?: number,
-): string {
-  const params = new URLSearchParams();
-  if (query) params.set("q", query);
-  params.set("from", source);
-  if (position !== undefined) params.set("pos", String(position));
-
-  const queryString = params.toString();
-  return `/api/r/${productId}${queryString ? `?${queryString}` : ""}`;
 }
