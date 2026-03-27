@@ -156,9 +156,9 @@ function ProductRow({
 
         {/* Col 7: Actions */}
         <div className="flex items-center justify-end gap-1">
-          <Button size="xs" variant={product.isActive ? "outline" : "default"} disabled>
+         {/*  <Button size="xs" variant={product.isActive ? "outline" : "default"} disabled>
             {ctaLabel}
-          </Button>
+          </Button> */}
           <Button size="icon-xs" variant="ghost" aria-label="Mas acciones" disabled>
             <MoreHorizontal className="h-3.5 w-3.5 text-muted-foreground" />
           </Button>

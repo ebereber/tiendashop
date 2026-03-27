@@ -90,7 +90,8 @@ export interface TiendanubePaginatedResponse<T> {
 export type TiendanubeWebhookEvent =
   | "product/created"
   | "product/updated"
-  | "product/deleted";
+  | "product/deleted"
+  | "app/uninstalled";
 
 export interface TiendanubeWebhook {
   id: number;
@@ -103,5 +104,5 @@ export interface TiendanubeWebhook {
 export interface TiendanubeWebhookPayload {
   store_id: number;
   event: TiendanubeWebhookEvent;
-  id: number; // product_id for product events
+  id?: number; // product_id for product events, undefined for app events
 }

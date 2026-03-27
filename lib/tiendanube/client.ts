@@ -164,6 +164,7 @@ export class TiendanubeClient {
       "product/created",
       "product/updated",
       "product/deleted",
+      "app/uninstalled",
     ];
 
     // Get existing webhooks to avoid duplicates
