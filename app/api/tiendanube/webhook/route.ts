@@ -6,15 +6,33 @@ import { syncSingleProduct } from "@/lib/services/product-sync";
 import type { TiendanubeWebhookPayload } from "@/lib/tiendanube/types";
 
 export async function POST(request: NextRequest) {
+  const signature = request.headers.get("x-linkedstore-hmac-sha256");
+  const contentType = request.headers.get("content-type");
+  const userAgent = request.headers.get("user-agent");
+
+  console.log("[Webhook][IN] request received", {
+    method: request.method,
+    url: request.url,
+    "x-linkedstore-hmac-sha256": signature,
+    "content-type": contentType,
+    "user-agent": userAgent,
+  });
+
   // Read raw body for signature verification
   const rawBody = await request.text();
-  const signature = request.headers.get("x-linkedstore-hmac-sha256");
+  console.log("[Webhook][IN] raw body received", {
+    length: rawBody.length,
+    bodyPreview: rawBody.slice(0, 300),
+  });
 
   // Verify signature
-  if (!verifyWebhookSignature(rawBody, signature)) {
+  const signatureValid = verifyWebhookSignature(rawBody, signature);
+  if (!signatureValid) {
+    console.error("[Webhook][SIG] invalid");
     console.error("[Webhook] signature=invalid");
     return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
   }
+  console.log("[Webhook][SIG] valid");
 
   // Parse payload
   let payload: TiendanubeWebhookPayload;
@@ -26,6 +44,11 @@ export async function POST(request: NextRequest) {
   }
 
   const { store_id, event, id: productId } = payload;
+  console.log("[Webhook][PAYLOAD] parsed", {
+    event,
+    store_id,
+    id: productId,
+  });
   const logCtx = `${event} store=${store_id} product=${productId}`;
 
   // Get store by tiendanube_store_id
