@@ -350,6 +350,10 @@ async function upsertProduct(
     price_min: priceMin,
     price_max: priceMax,
     has_stock: totalStock > 0,
+    // Reactivate products previously disabled by store uninstallation.
+    system_status: "visible" as Database["public"]["Enums"]["system_status"],
+    system_status_reason: null,
+    system_status_detail: null,
     synced_at: new Date().toISOString(),
   };
 

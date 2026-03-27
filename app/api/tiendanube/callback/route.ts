@@ -169,13 +169,43 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(`${appUrl}/conectar?error=store_fetch`);
   }
 
-  // Check if store already exists
-  const { data: existingStore } = await supabaseAdmin
+  // Check if store already exists (including soft-deleted)
+  const { data: storesByTiendanubeId, error: storesLookupError } = await supabaseAdmin
     .from("stores")
-    .select("id, organization_id")
-    .eq("tiendanube_store_id", tiendanubeStoreId)
-    .is("deleted_at", null)
-    .maybeSingle();
+    .select("id, organization_id, deleted_at")
+    .eq("tiendanube_store_id", tiendanubeStoreId);
+
+  if (storesLookupError) {
+    console.error("[Tiendanube OAuth] Store lookup failed:", {
+      storeId: tiendanubeStoreId,
+      error: storesLookupError,
+    });
+    return NextResponse.redirect(`${appUrl}/conectar?error=store_lookup`);
+  }
+
+  const matchedStores = storesByTiendanubeId ?? [];
+  const activeStores = matchedStores.filter((s) => !s.deleted_at);
+  const deletedStores = matchedStores.filter((s) => Boolean(s.deleted_at));
+
+  if (activeStores.length > 1 || (activeStores.length === 0 && deletedStores.length > 1)) {
+    console.error("[Tiendanube OAuth] Inconsistent store state (ambiguous):", {
+      storeId: tiendanubeStoreId,
+      activeStoreIds: activeStores.map((s) => s.id),
+      deletedStoreIds: deletedStores.map((s) => s.id),
+    });
+    return NextResponse.redirect(`${appUrl}/conectar?error=store_inconsistent`);
+  }
+
+  if (activeStores.length === 1 && deletedStores.length > 0) {
+    console.error("[Tiendanube OAuth] Inconsistent store state (active + deleted duplicates):", {
+      storeId: tiendanubeStoreId,
+      activeStoreId: activeStores[0].id,
+      deletedStoreIds: deletedStores.map((s) => s.id),
+    });
+  }
+
+  const existingStore = activeStores[0] ?? deletedStores[0] ?? null;
+  const isReactivatingStore = Boolean(existingStore?.deleted_at);
 
   if (existingStore) {
     // Check if user is already a member
@@ -194,28 +224,57 @@ export async function GET(request: NextRequest) {
       return NextResponse.redirect(`${appUrl}/conectar?error=store_taken`);
     }
 
-    // Update access token for existing store
-    const { error: updateError } = await supabaseAdmin
-      .from("stores")
-      .update({
-        access_token: tokenData.access_token,
-      })
-      .eq("id", existingStore.id);
+    if (isReactivatingStore) {
+      // Reactivate soft-deleted store and restore sync state
+      const { error: reactivateError } = await supabaseAdmin
+        .from("stores")
+        .update({
+          deleted_at: null,
+          access_token: tokenData.access_token,
+          sync_status: "ok",
+          sync_error_message: null,
+        })
+        .eq("id", existingStore.id);
 
-    if (updateError) {
-      console.error("[Tiendanube OAuth] Token update failed:", updateError);
+      if (reactivateError) {
+        console.error("[Tiendanube OAuth] Store reactivation failed:", {
+          storeId: tiendanubeStoreId,
+          localStoreId: existingStore.id,
+          error: reactivateError,
+        });
+        return NextResponse.redirect(`${appUrl}/conectar?error=store_reactivate`);
+      }
+    } else {
+      // Update access token for existing active store
+      const { error: updateError } = await supabaseAdmin
+        .from("stores")
+        .update({
+          access_token: tokenData.access_token,
+        })
+        .eq("id", existingStore.id);
+
+      if (updateError) {
+        console.error("[Tiendanube OAuth] Token update failed:", updateError);
+      }
     }
 
-    // Check if store needs initial sync (no products yet)
-    const { count: productsCount, error: productsCountError } = await supabaseAdmin
-      .from("products")
-      .select("id", { count: "exact", head: true })
-      .eq("store_id", existingStore.id);
+    let shouldRunSync = isReactivatingStore;
+    if (!isReactivatingStore) {
+      // Check if store needs initial sync (no products yet)
+      const { count: productsCount, error: productsCountError } = await supabaseAdmin
+        .from("products")
+        .select("id", { count: "exact", head: true })
+        .eq("store_id", existingStore.id);
 
-    if (productsCountError) {
-      console.error("[Tiendanube OAuth] Product count check failed:", productsCountError);
-    } else if ((productsCount ?? 0) === 0) {
-      // Execute initial sync
+      if (productsCountError) {
+        console.error("[Tiendanube OAuth] Product count check failed:", productsCountError);
+      } else if ((productsCount ?? 0) === 0) {
+        shouldRunSync = true;
+      }
+    }
+
+    if (shouldRunSync) {
+      // Execute initial sync (or full re-sync on store reactivation)
       await syncStoreProducts({
         supabase: supabaseAdmin,
         storeId: existingStore.id,
