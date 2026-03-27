@@ -2,6 +2,7 @@ import Link from "next/link";
 
 import { getProducts } from "@/lib/services/products";
 import { ProductList } from "@/components/dashboard/product-list";
+import { ProductToolsMenu } from "@/components/dashboard/product-tools-menu";
 import { Card, CardContent } from "@/components/ui/card";
 import { buttonVariants } from "@/components/ui/button";
 
@@ -55,9 +56,12 @@ export default async function ProductosPage({ searchParams }: Props) {
     <div className="space-y-6">
       <div className="flex items-center justify-between gap-4">
         <h1 className="text-2xl font-semibold">Productos</h1>
-        <p className="text-sm text-muted-foreground">
-          {result.total} producto{result.total !== 1 ? "s" : ""}
-        </p>
+        <div className="flex items-center gap-3">
+          <p className="text-sm text-muted-foreground">
+            {result.total} producto{result.total !== 1 ? "s" : ""}
+          </p>
+          <ProductToolsMenu />
+        </div>
       </div>
 
       <ProductList products={result.products} />
