@@ -227,37 +227,9 @@ export async function GET(request: NextRequest) {
     // Re-register webhooks on reconnect (non-blocking)
     const webhookUrl = `${appUrl}/api/tiendanube/webhook`;
     const client = createTiendanubeClient(tiendanubeStoreId, tokenData.access_token);
-    console.log("[Tiendanube OAuth] Registering webhooks", {
-      tiendanubeStoreId,
-      webhookUrl,
-    });
     const webhookResult = await client.registerWebhooks(webhookUrl);
-    console.log("[Tiendanube OAuth] registerWebhooks result", {
-      tiendanubeStoreId,
-      webhookUrl,
-      webhookResult,
-    });
     if (!webhookResult.success) {
       console.error("[Tiendanube OAuth] Webhook re-registration failed:", webhookResult.errors);
-    } else {
-      console.log("[Tiendanube OAuth] Webhook re-registration completed");
-    }
-
-    const webhooksAfterResult = await client.listWebhooks();
-    if (webhooksAfterResult.error) {
-      console.error("[Tiendanube OAuth] Failed to list webhooks after re-registration:", {
-        tiendanubeStoreId,
-        error: webhooksAfterResult.error,
-      });
-    } else {
-      console.log("[Tiendanube OAuth] Webhooks after re-registration", {
-        tiendanubeStoreId,
-        webhooks: (webhooksAfterResult.data ?? []).map((w) => ({
-          id: w.id,
-          event: w.event,
-          url: w.url,
-        })),
-      });
     }
 
     return NextResponse.redirect(`${appUrl}/dashboard`);
@@ -364,38 +336,10 @@ export async function GET(request: NextRequest) {
   // Register webhooks (non-blocking)
   const webhookUrl = `${appUrl}/api/tiendanube/webhook`;
   const client = createTiendanubeClient(tiendanubeStoreId, tokenData.access_token);
-  console.log("[Tiendanube OAuth] Registering webhooks", {
-    tiendanubeStoreId,
-    webhookUrl,
-  });
   const webhookResult = await client.registerWebhooks(webhookUrl);
-  console.log("[Tiendanube OAuth] registerWebhooks result", {
-    tiendanubeStoreId,
-    webhookUrl,
-    webhookResult,
-  });
   if (!webhookResult.success) {
     console.error("[Tiendanube OAuth] Webhook registration failed:", webhookResult.errors);
     // Continue anyway - manual sync is fallback
-  } else {
-    console.log("[Tiendanube OAuth] Webhooks registered successfully");
-  }
-
-  const webhooksAfterResult = await client.listWebhooks();
-  if (webhooksAfterResult.error) {
-    console.error("[Tiendanube OAuth] Failed to list webhooks after registration:", {
-      tiendanubeStoreId,
-      error: webhooksAfterResult.error,
-    });
-  } else {
-    console.log("[Tiendanube OAuth] Webhooks after registration", {
-      tiendanubeStoreId,
-      webhooks: (webhooksAfterResult.data ?? []).map((w) => ({
-        id: w.id,
-        event: w.event,
-        url: w.url,
-      })),
-    });
   }
 
   // Execute initial product sync

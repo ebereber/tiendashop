@@ -7,48 +7,27 @@ import type { TiendanubeWebhookPayload } from "@/lib/tiendanube/types";
 
 export async function POST(request: NextRequest) {
   const signature = request.headers.get("x-linkedstore-hmac-sha256");
-  const contentType = request.headers.get("content-type");
-  const userAgent = request.headers.get("user-agent");
-
-  console.log("[Webhook][IN] request received", {
-    method: request.method,
-    url: request.url,
-    "x-linkedstore-hmac-sha256": signature,
-    "content-type": contentType,
-    "user-agent": userAgent,
-  });
 
   // Read raw body for signature verification
   const rawBody = await request.text();
-  console.log("[Webhook][IN] raw body received", {
-    length: rawBody.length,
-    bodyPreview: rawBody.slice(0, 300),
-  });
 
   // Verify signature
-  const signatureValid = verifyWebhookSignature(rawBody, signature);
-  if (!signatureValid) {
-    console.error("[Webhook][SIG] invalid");
-    console.error("[Webhook] signature=invalid");
+  if (!verifyWebhookSignature(rawBody, signature)) {
+    console.error("[Webhook][ERROR] signature=invalid");
     return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
   }
-  console.log("[Webhook][SIG] valid");
 
   // Parse payload
   let payload: TiendanubeWebhookPayload;
   try {
     payload = JSON.parse(rawBody);
   } catch {
-    console.error("[Webhook] payload=invalid");
+    console.error("[Webhook][ERROR] payload=invalid");
     return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
   }
 
   const { store_id, event, id: productId } = payload;
-  console.log("[Webhook][PAYLOAD] parsed", {
-    event,
-    store_id,
-    id: productId,
-  });
+  console.log(`[Webhook] ${event} store=${store_id} product=${productId}`);
   const logCtx = `${event} store=${store_id} product=${productId}`;
 
   // Get store by tiendanube_store_id
@@ -77,7 +56,9 @@ export async function POST(request: NextRequest) {
       await handleProductUpsert(store.id, String(store_id), store.access_token, productId, logCtx);
     }
   } catch (err) {
-    console.error(`[Webhook] ${logCtx} error=${err instanceof Error ? err.message : "unknown"}`);
+    console.error(
+      `[Webhook][ERROR] ${logCtx} error=${err instanceof Error ? err.message : "unknown"}`
+    );
   }
 
   return NextResponse.json({ ok: true });
@@ -95,7 +76,7 @@ async function handleProductDeleted(
     .eq("tiendanube_product_id", String(tiendanubeProductId));
 
   if (error) {
-    console.error(`[Webhook] ${logCtx} result=delete_error msg=${error.message}`);
+    console.error(`[Webhook][ERROR] ${logCtx} result=delete_error msg=${error.message}`);
   } else {
     console.log(`[Webhook] ${logCtx} result=deleted`);
   }
@@ -112,7 +93,7 @@ async function handleProductUpsert(
   const productResult = await client.getProduct(tiendanubeProductId);
 
   if (productResult.error) {
-    console.error(`[Webhook] ${logCtx} result=fetch_error msg=${productResult.error}`);
+    console.error(`[Webhook][ERROR] ${logCtx} result=fetch_error msg=${productResult.error}`);
     return;
   }
 
@@ -131,6 +112,6 @@ async function handleProductUpsert(
     const action = syncResult.isNew ? "created" : "updated";
     console.log(`[Webhook] ${logCtx} result=${action} local_id=${syncResult.productId}`);
   } else {
-    console.error(`[Webhook] ${logCtx} result=sync_error msg=${syncResult.error}`);
+    console.error(`[Webhook][ERROR] ${logCtx} result=sync_error msg=${syncResult.error}`);
   }
 }

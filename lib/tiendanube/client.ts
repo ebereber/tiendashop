@@ -181,22 +181,11 @@ export class TiendanubeClient {
     for (const event of events) {
       // Skip if already registered for this URL
       if (existingEvents.has(event)) {
-        console.log("[Tiendanube Webhooks] create skipped (already exists)", {
-          storeId: this.storeId,
-          event,
-          webhookUrl,
-        });
         continue;
       }
 
       const endpoint = this.buildUrl("webhooks").toString();
       const body = { event, url: webhookUrl };
-
-      console.log("[Tiendanube Webhooks] create request", {
-        storeId: this.storeId,
-        endpoint,
-        body,
-      });
 
       try {
         const response = await fetch(endpoint, {
@@ -205,36 +194,20 @@ export class TiendanubeClient {
           body: JSON.stringify(body),
         });
 
-        const responseText = await response.text();
-        let parsedResponse: unknown = responseText;
-        try {
-          parsedResponse = JSON.parse(responseText);
-        } catch {
-          // Keep raw text when response is not JSON
-        }
-
         if (!response.ok) {
-          console.error("[Tiendanube Webhooks] create failed", {
+          console.error("[Tiendanube Webhooks][ERROR] create failed", {
             storeId: this.storeId,
             event,
             webhookUrl,
             status: response.status,
-            body: responseText,
           });
           errors.push(`${event}: HTTP ${response.status}`);
           continue;
         }
-
-        console.log("[Tiendanube Webhooks] create response", {
-          storeId: this.storeId,
-          event,
-          status: response.status,
-          response: parsedResponse,
-        });
       } catch (err) {
         const message =
           err instanceof Error ? err.message : "Error de conexion webhook";
-        console.error("[Tiendanube Webhooks] create request error", {
+        console.error("[Tiendanube Webhooks][ERROR] create request error", {
           storeId: this.storeId,
           event,
           webhookUrl,
