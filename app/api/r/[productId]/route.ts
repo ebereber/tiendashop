@@ -34,6 +34,7 @@ export async function GET(
       `
       id,
       store_id,
+      handle,
       merchant_status,
       system_status,
       stores!inner (
@@ -60,10 +61,13 @@ export async function GET(
     slug: string;
   };
 
-  // Build target URL - use domain if available, otherwise fallback to Tiendanube URL
-  const targetUrl = store.domain
+  // Build target URL - redirect to specific product URL in Tiendanube store
+  const baseUrl = store.domain
     ? `https://${store.domain}`
     : `https://${store.slug}.mitiendanube.com`;
+  const targetUrl = product.handle
+    ? `${baseUrl}/productos/${encodeURIComponent(product.handle)}`
+    : baseUrl;
 
   // Get user_id if logged in (optional)
   let userId: string | null = null;

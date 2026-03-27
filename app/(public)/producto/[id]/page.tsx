@@ -1,11 +1,10 @@
 import type { Metadata } from "next";
 import Image from "next/image";
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import DOMPurify from "isomorphic-dompurify";
 import { getPublicProductById } from "@/lib/services/products";
 import { isAllowedImageHost } from "@/lib/images/allowed-hosts";
-import { Button } from "@/components/ui/button";
+import { ProductInfo } from "@/components/product/product-info";
 
 interface Props {
   params: Promise<{ id: string }>;
@@ -39,12 +38,6 @@ export default async function ProductoPage({ params }: Props) {
     notFound();
   }
 
-  const formattedPrice =
-    product.priceMin != null && product.priceMin > 0
-      ? `$${product.priceMin.toLocaleString("es-AR")}`
-      : null;
-
-  const buyUrl = `/api/r/${product.id}?from=product&pos=0`;
   const cleanDescription = product.description
     ? DOMPurify.sanitize(product.description, {
         ALLOWED_TAGS: ["p", "br", "b", "strong", "i", "em", "ul", "ol", "li"],
@@ -110,53 +103,16 @@ export default async function ProductoPage({ params }: Props) {
           </div>
 
           {/* Product info */}
-          <div className="space-y-6">
-            <div>
-              {product.brand && (
-                <p className="text-sm text-muted-foreground">{product.brand}</p>
-              )}
-              <h1 className="mt-1 text-2xl font-bold sm:text-3xl">
-                {product.title}
-              </h1>
-            </div>
-
-            {formattedPrice && (
-              <p className="text-3xl font-bold">{formattedPrice}</p>
-            )}
-
-            <p className="text-sm text-muted-foreground">En stock</p>
-
-            <Button
-              size="lg"
-              className="w-full sm:w-auto"
-              nativeButton={false}
-              render={<a href={buyUrl} />}
-            >
-              Comprar en {product.storeName}
-            </Button>
-
-            <div className="border-t pt-4">
-              <p className="text-sm text-muted-foreground">
-                Vendido por{" "}
-                <Link
-                  href={`/tienda/${product.storeSlug}`}
-                  className="font-medium text-foreground hover:underline"
-                >
-                  {product.storeName}
-                </Link>
-              </p>
-            </div>
-
-            {cleanDescription && (
-              <div className="border-t pt-4">
-                <h2 className="mb-2 font-semibold">Descripcion</h2>
-                <div
-                  className="prose prose-sm max-w-none text-muted-foreground"
-                  dangerouslySetInnerHTML={{ __html: cleanDescription }}
-                />
-              </div>
-            )}
-          </div>
+          <ProductInfo
+            productId={product.id}
+            title={product.title}
+            brand={product.brand}
+            priceMin={product.priceMin}
+            storeName={product.storeName}
+            storeSlug={product.storeSlug}
+            variants={product.variants}
+            cleanDescription={cleanDescription}
+          />
         </div>
       </div>
     </div>

@@ -11,6 +11,14 @@ export interface ProductImage {
   position: number;
 }
 
+export interface ProductVariant {
+  id: string;
+  title: string;
+  price: number;
+  stock: number;
+  attributes: Record<string, string>[] | null;
+}
+
 export interface ProductWithDetails {
   id: string;
   title: string;
@@ -21,6 +29,7 @@ export interface ProductWithDetails {
   storeName: string;
   storeSlug: string;
   images: ProductImage[];
+  variants: ProductVariant[];
 }
 
 export const getPublicProductById = cache(async (id: string): Promise<ProductWithDetails | null> => {
@@ -45,6 +54,13 @@ export const getPublicProductById = cache(async (id: string): Promise<ProductWit
       product_images (
         url,
         position
+      ),
+      product_variants (
+        id,
+        title,
+        price,
+        stock,
+        attributes
       )
     `
     )
@@ -75,6 +91,16 @@ export const getPublicProductById = cache(async (id: string): Promise<ProductWit
     return null;
   }
 
+  const rawVariants =
+    (data.product_variants as {
+      id: string;
+      title: string;
+      price: number;
+      stock: number;
+      attributes: Record<string, string>[] | null;
+    }[]) ?? [];
+  const sortedVariants = [...rawVariants].sort((a, b) => a.price - b.price);
+
   return {
     id: data.id,
     title: data.title,
@@ -85,6 +111,7 @@ export const getPublicProductById = cache(async (id: string): Promise<ProductWit
     storeName: store.name,
     storeSlug: store.slug,
     images: sortedImages,
+    variants: sortedVariants,
   };
 });
 

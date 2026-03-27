@@ -313,6 +313,7 @@ export type Database = {
           brand: string | null
           created_at: string
           description: string | null
+          handle: string | null
           has_stock: boolean
           id: string
           merchant_status: Database["public"]["Enums"]["merchant_status"]
@@ -336,6 +337,7 @@ export type Database = {
           brand?: string | null
           created_at?: string
           description?: string | null
+          handle?: string | null
           has_stock?: boolean
           id?: string
           merchant_status?: Database["public"]["Enums"]["merchant_status"]
@@ -359,6 +361,7 @@ export type Database = {
           brand?: string | null
           created_at?: string
           description?: string | null
+          handle?: string | null
           has_stock?: boolean
           id?: string
           merchant_status?: Database["public"]["Enums"]["merchant_status"]

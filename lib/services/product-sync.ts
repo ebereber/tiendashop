@@ -317,6 +317,7 @@ async function upsertProduct(
 ): Promise<UpsertProductResult> {
   const title = extractLocalizedText(tnProduct.name);
   const description = extractLocalizedText(tnProduct.description);
+  const handle = extractLocalizedText(tnProduct.handle);
 
   // Calculate price range from variants
   const prices = tnProduct.variants
@@ -346,6 +347,7 @@ async function upsertProduct(
     tiendanube_product_id: String(tnProduct.id),
     title,
     description,
+    handle: handle || null,
     brand: tnProduct.brand,
     price_min: priceMin,
     price_max: priceMax,
