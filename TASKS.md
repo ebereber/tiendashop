@@ -14,8 +14,8 @@ Cada task es un módulo — cuando termina, algo nuevo funciona end-to-end.
 - [x] TASK-05 — OAuth callback (tokens + crear store)
 - [x] TASK-06 — Sync de productos 
 - [x] TASK-07 - Mejorar la UX del sync inicial/manual de productos 
-- [ ] **TASK-08 — Dashboard productos** ← actual
-- [ ] TASK-9 — Home público
+- [x] TASK-08 — Dashboard productos
+- [ ] **TASK-09-10 — Home público** ← actual
 - [ ] TASK-10 — Búsqueda pública
 - [ ] TASK-11 — Redirect tracking
 
@@ -572,3 +572,197 @@ Output esperado
 2. decisiones breves
 3. código o diff por archivo
 4. confirmar `pnpm exec tsc --noEmit`
+
+
+## TASK 09-10 Implementar el catálogo público global — home y búsqueda.
+
+
+## Objetivo
+
+Mostrar productos de todas las tiendas sincronizadas en una interfaz pública.
+Esta es la pantalla principal de la plataforma — lo que ve cualquier visitante al entrar.
+
+---
+
+## Contexto
+
+- Los productos ya están en DB, sincronizados desde Tiendanube
+- Solo mostrar productos con `merchant_status = 'active'` y `system_status = 'visible'`
+- Solo de stores con `deleted_at IS NULL` y `sync_status != 'disabled'`
+- No llamar a la API de Tiendanube — solo leer DB local
+- La búsqueda usa `search_vector` (tsvector ya generado en DB)
+
+---
+
+## Rutas
+
+- `/` → home con productos y buscador
+- `/buscar` → resultados de búsqueda (`?q=...`)
+
+---
+
+## Alcance
+
+### 1. Home `/`
+
+- Buscador prominente (input de texto)
+- Al hacer submit → navegar a `/buscar?q=...`
+- Listado de productos recientes (sin query, ordenados por `created_at desc`)
+- CTA visible: "Publicar mi tienda" → `/conectar`
+- SSR — no client-side fetching
+
+### 2. Búsqueda `/buscar`
+
+- Recibe `?q=` como query param
+- Búsqueda full-text usando `plainto_tsquery('simple', query)` — no usar `to_tsquery` porque rompe con espacios e input de usuario
+- Ordenar resultados por `ts_rank(search_vector, plainto_tsquery('simple', query)) desc`
+- Si `q` está vacío → mostrar todos los productos ordenados por `created_at desc`
+- SSR — la página es indexable por Google
+- Metadata dinámica: `<title>` con el término buscado
+- Empty state con el término: `No encontramos resultados para "{q}"`
+
+### 3. Product card
+
+Componente reutilizable `components/product/product-card.tsx`:
+- imagen principal (primera de `product_images` por `position asc`)
+- nombre del producto (`title`)
+- precio (`price_min` — ya calculado por trigger)
+- nombre de la tienda
+- click → `/api/r/[productId]?q=...&from=search&pos=N`
+
+---
+
+## Backend
+
+### `lib/services/search.ts`
+
+Crear función:
+```ts
+getProducts(query?: string, limit?: number): Promise<ProductWithStore[]>
+```
+
+Debe:
+- si hay `query`:
+  - filtrar con `search_vector @@ plainto_tsquery('simple', query)`
+  - ordenar por `ts_rank(search_vector, plainto_tsquery('simple', query)) desc`
+- si no hay `query`: ordenar por `created_at desc`
+- join con `stores` para traer nombre de tienda
+- imagen principal: `product_images` con `order by position asc limit 1` por producto
+- usar `price_min` directo desde `products` (no calcular acá)
+- filtros siempre activos:
+  - `products.merchant_status = 'active'`
+  - `products.system_status = 'visible'`
+  - `stores.deleted_at IS NULL`
+  - `stores.sync_status != 'disabled'`
+- límite default: 48 productos
+- no hacer N+1
+
+Índice requerido — verificar que exista, crear migración si falta:
+```sql
+CREATE INDEX IF NOT EXISTS idx_products_search_vector
+ON products USING GIN (search_vector);
+```
+
+---
+
+## UI
+
+- usar componentes de shadcn/ui existentes
+- leer `.agents/skills/frontend-design/SKILL.md` antes de implementar
+- textos en español
+- sin animaciones ni transiciones por ahora
+
+### Estados necesarios
+
+- **loading**: Suspense con skeleton cards
+- **empty**: `No encontramos resultados para "{q}"`
+- **error**: mensaje simple, sin stack trace
+
+---
+
+## Redirect tracking
+
+El click en un producto debe pasar por `/api/r/[productId]`.
+
+Si el endpoint no existe todavía, crearlo en esta task:
+
+`app/api/r/[productId]/route.ts`
+
+Debe:
+1. recibir query params: `?q=`, `?from=`, `?pos=`
+2. insertar en `redirect_events`:
+   - `product_id`
+   - `store_id`
+   - `user_id` (si hay sesión, nullable)
+   - `session_id` (desde cookie, siempre presente)
+   - `query_origin` (desde `?q=`)
+   - `source_type` (desde `?from=`)
+   - `result_position` (desde `?pos=`)
+3. redirigir a la URL de la tienda original (302)
+4. responder siempre con redirect aunque falle el log — nunca bloquear al usuario
+
+`session_id`:
+- leer desde cookie `session_id`
+- si no existe, generar con `crypto.randomUUID()` y persistir en cookie con `maxAge` largo
+- no regenerar en cada request — siempre reusar el existente
+
+---
+
+## SEO
+
+- `generateMetadata` en `/buscar` con el término buscado
+- URLs legibles y sin parámetros innecesarios
+- SSR obligatorio — no usar client fetching para el listado principal
+
+---
+
+## No hacer
+
+- filtros por categoría, precio, marca — task posterior
+- página `/categoria/[slug]` — task posterior
+- página `/tienda/[slug]` — task posterior
+- página `/producto/[id]` — task posterior
+- carrito, checkout, pagos
+- autenticación obligatoria para ver productos
+- ranking avanzado — `ts_rank` es suficiente ahora
+- infinite scroll — límite fijo de 48
+
+---
+
+## Skills a usar antes de implementar
+
+- Leer `.agents/skills/nextjs-best-practices/SKILL.md`
+- Leer `.agents/skills/frontend-design/SKILL.md`
+- Usar Context7 MCP para documentación actualizada de Next.js
+
+---
+
+## Archivos a crear/modificar
+
+```
+app/(public)/page.tsx                     ← home
+app/(public)/buscar/page.tsx              ← resultados
+components/product/product-card.tsx       ← card reutilizable
+components/product/product-grid.tsx       ← grilla de cards
+components/search/search-input.tsx        ← input con submit
+lib/services/search.ts                    ← lógica de búsqueda
+app/api/r/[productId]/route.ts            ← redirect tracking (si no existe)
+```
+
+---
+
+## Output esperado
+
+1. archivos creados/modificados
+2. decisiones breves
+3. código o diff por archivo
+4. confirmar `pnpm exec tsc --noEmit`
+
+---
+
+## Reglas
+
+- no refactor de lo que ya funciona
+- no tocar sync ni dashboard
+- cambios chicos y auditables
+- no inventar features fuera del alcance

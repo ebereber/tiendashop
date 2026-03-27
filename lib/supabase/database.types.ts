@@ -808,7 +808,13 @@ export type Database = {
         | "no_price"
         | "external_image"
         | "description_too_short"
-      redirect_source_type: "search" | "category" | "brand" | "store" | "saved"
+      redirect_source_type:
+        | "home"
+        | "search"
+        | "category"
+        | "brand"
+        | "store"
+        | "saved"
       sync_status: "ok" | "error" | "stale" | "disabled" | "syncing"
       system_status: "visible" | "hidden" | "error"
       system_status_reason:
@@ -959,7 +965,7 @@ export const Constants = {
         "external_image",
         "description_too_short",
       ],
-      redirect_source_type: ["search", "category", "brand", "store", "saved"],
+      redirect_source_type: ["home", "search", "category", "brand", "store", "saved"],
       sync_status: ["ok", "error", "stale", "disabled", "syncing"],
       system_status: ["visible", "hidden", "error"],
       system_status_reason: [
