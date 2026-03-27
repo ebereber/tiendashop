@@ -11,6 +11,14 @@ const nextConfig = {
       ],
     },
   },
+  images: {
+  remotePatterns: [
+    {
+      protocol: "https",
+      hostname: "*.mitiendanube.com",
+    },
+  ],
+},
 };
 
 export default nextConfig

@@ -10,15 +10,14 @@ Cada task es un módulo — cuando termina, algo nuevo funciona end-to-end.
 - [x] TASK-01 — Setup del proyecto
 - [x] TASK-02 — Auth (registro + login + sesión)
 - [x] TASK-03 — Dashboard layout + protección de rutas** 
-- [x] **TASK-04 — Onboarding + OAuth con Tiendanube
+- [x] TASK-04 — Onboarding + OAuth con Tiendanube
 - [x] TASK-05 — OAuth callback (tokens + crear store)
-- [x] **TASK-06 — Sync de productos** 
-- [x] **TASK-07 - Mejorar la UX del sync inicial/manual de productos** ← actual
-- [ ] TASK-08 — Dashboard resumen
-- [ ] TASK-09 — Dashboard productos
-- [ ] TASK-10 — Home público
-- [ ] TASK-11 — Búsqueda pública
-- [ ] TASK-12 — Redirect tracking
+- [x] TASK-06 — Sync de productos 
+- [x] TASK-07 - Mejorar la UX del sync inicial/manual de productos 
+- [ ] **TASK-08 — Dashboard productos** ← actual
+- [ ] TASK-9 — Home público
+- [ ] TASK-10 — Búsqueda pública
+- [ ] TASK-11 — Redirect tracking
 
 ---
 
@@ -464,5 +463,112 @@ Reglas
 Output:
 1. lista de archivos creados/modificados
 2. decisiones (breve)
+3. código o diff por archivo
+4. confirmar `pnpm exec tsc --noEmit`
+
+## TASK-08 
+
+Implementar listado de productos en el dashboard.
+
+Objetivo
+Mostrar los productos ya sincronizados desde Tiendanube en `/dashboard/productos`.
+
+Alcance
+- solo lectura
+- no edición
+- no filtros complejos
+- no búsqueda avanzada
+- paginación básica
+
+Datos disponibles
+Tablas:
+- products
+- product_variants
+- product_images
+
+Relaciones:
+- products → tiene variantes e imágenes
+- cada producto pertenece a una store
+- store pertenece a una organization
+
+Implementación
+
+1. Backend (lectura)
+Crear función en:
+- lib/services/products.ts
+
+Debe:
+- obtener usuario actual
+- obtener organization actual
+- obtener store activa
+- traer productos de esa store
+
+Campos mínimos por producto:
+- id
+- title
+- brand
+- created_at
+- primera imagen (si existe)
+- precio
+- stock
+
+Regla para precio/stock:
+- “variante principal” = primera variante ordenada por precio asc
+- si no hay variantes, mostrar precio y stock vacíos sin romper
+
+2. Query
+- no hacer N+1
+- usar select con embed de Supabase en una sola query, trayendo:
+  - products
+  - product_variants
+  - product_images
+- ejemplo esperado: query embebida tipo `.select(... product_variants(...), product_images(...))`
+- seleccionar solo lo necesario
+
+3. Paginación
+- implementar paginación básica
+- límite: 50 productos por página
+- usar offset simple
+- ordenar por `created_at desc`
+
+4. UI
+Archivo:
+- app/(dashboard)/dashboard/productos/page.tsx
+
+Mostrar:
+- lista o tabla simple
+- cada producto:
+  - imagen (thumbnail)
+  - nombre
+  - precio
+  - stock
+  - marca (opcional)
+
+5. UX mínima
+- loading state
+- empty state:
+  - “No tenés productos todavía”
+- error state simple
+- controles básicos de paginación si aplica
+
+6. Reglas
+- no usar supabaseAdmin en frontend
+- usar server component para la página
+- no agregar librerías nuevas
+- no refactorizar sync
+- no implementar edición
+- no implementar search todavía
+
+No hacer
+- categorías
+- filtros
+- calidad
+- estados publish
+- scoring
+- marketplace features
+
+Output esperado
+1. archivos creados/modificados
+2. decisiones breves
 3. código o diff por archivo
 4. confirmar `pnpm exec tsc --noEmit`
