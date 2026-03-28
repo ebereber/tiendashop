@@ -137,6 +137,9 @@ export interface ProductListItem {
   sku: string | null;
   variantsCount: number;
   variants: ProductVariantListItem[];
+  autoCategoryId: string | null;
+  manualCategoryId: string | null;
+  effectiveCategoryId: string | null;
 }
 
 export interface ProductsResult {
@@ -213,6 +216,8 @@ export async function getProducts(page: number = 1): Promise<ProductsResult> {
       price_max,
       has_stock,
       merchant_status,
+      auto_category_id,
+      manual_category_id,
       product_images (
         url,
         position
@@ -262,6 +267,10 @@ export async function getProducts(page: number = 1): Promise<ProductsResult> {
 
     const sku = variants.length === 1 ? (variants[0].sku ?? null) : null;
 
+    const autoCategoryId = product.auto_category_id ?? null;
+    const manualCategoryId = product.manual_category_id ?? null;
+    const effectiveCategoryId = manualCategoryId ?? autoCategoryId;
+
     return {
       id: product.id,
       title: product.title,
@@ -274,6 +283,9 @@ export async function getProducts(page: number = 1): Promise<ProductsResult> {
       sku,
       variantsCount: variants.length,
       variants: normalizedVariants,
+      autoCategoryId,
+      manualCategoryId,
+      effectiveCategoryId,
     };
   });
 

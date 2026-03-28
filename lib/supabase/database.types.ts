@@ -806,6 +806,10 @@ export type Database = {
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
       soft_delete_store: { Args: { p_store_id: string }; Returns: undefined }
+      update_product_manual_category: {
+        Args: { p_manual_category_id: string | null; p_product_id: string }
+        Returns: undefined
+      }
     }
     Enums: {
       flag_severity: "warning" | "error"

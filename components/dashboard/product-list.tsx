@@ -5,12 +5,15 @@ import Image from "next/image";
 import { ChevronDown, ChevronRight, MoreHorizontal, Package } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { CategorySelector } from "@/components/dashboard/category-selector";
 import { isAllowedImageHost } from "@/lib/images/allowed-hosts";
+import type { CategoryWithParent } from "@/lib/services/categories";
 import type { ProductListItem } from "@/lib/services/products";
 import { cn } from "@/lib/utils";
 
 interface ProductListProps {
   products: ProductListItem[];
+  categories: CategoryWithParent[];
 }
 
 function formatPrice(min: number | null, max: number | null): string {
@@ -67,10 +70,12 @@ function ProductRow({
   product,
   expanded,
   onToggle,
+  categories,
 }: {
   product: ProductListItem;
   expanded: boolean;
   onToggle: () => void;
+  categories: CategoryWithParent[];
 }) {
   const canExpand = product.variantsCount > 1;
   const ctaLabel = product.isActive ? "Archivar" : "Publicar";
@@ -85,13 +90,15 @@ function ProductRow({
         - Mobile (5 cols): expand, image, info, price, actions
         - SM (6 cols): + stock
         - MD (7 cols): + state badge
+        - LG (8 cols): + category
       */}
       <div
         className={cn(
           "grid items-center gap-x-2 px-3 py-2",
           "grid-cols-[1.5rem_2.5rem_1fr_5.5rem_auto]",
           "sm:grid-cols-[1.5rem_2.5rem_1fr_5.5rem_5rem_auto]",
-          "md:grid-cols-[1.5rem_2.5rem_1fr_5.5rem_5rem_4.5rem_auto]"
+          "md:grid-cols-[1.5rem_2.5rem_1fr_5.5rem_5rem_4.5rem_auto]",
+          "lg:grid-cols-[1.5rem_2.5rem_1fr_5.5rem_5rem_4.5rem_10rem_auto]"
         )}
       >
         {/* Col 1: Expand */}
@@ -154,7 +161,18 @@ function ProductRow({
           <ProductStateBadge isActive={product.isActive} />
         </div>
 
-        {/* Col 7: Actions */}
+        {/* Col 7: Category (hidden below lg) */}
+        <div className="hidden lg:block">
+          <CategorySelector
+            productId={product.id}
+            currentCategoryId={product.effectiveCategoryId}
+            autoCategoryId={product.autoCategoryId}
+            isManual={product.manualCategoryId !== null}
+            categories={categories}
+          />
+        </div>
+
+        {/* Col 8: Actions */}
         <div className="flex items-center justify-end gap-1">
          {/*  <Button size="xs" variant={product.isActive ? "outline" : "default"} disabled>
             {ctaLabel}
@@ -197,7 +215,7 @@ function ProductRow({
   );
 }
 
-export function ProductList({ products }: ProductListProps) {
+export function ProductList({ products, categories }: ProductListProps) {
   const [expandedRows, setExpandedRows] = useState<Record<string, boolean>>({});
 
   const toggleRow = (id: string) => {
@@ -213,6 +231,7 @@ export function ProductList({ products }: ProductListProps) {
             product={product}
             expanded={!!expandedRows[product.id]}
             onToggle={() => toggleRow(product.id)}
+            categories={categories}
           />
         ))}
       </div>

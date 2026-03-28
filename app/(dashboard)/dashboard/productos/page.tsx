@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { getProducts } from "@/lib/services/products";
+import { getAllCategories } from "@/lib/services/categories";
 import { ProductList } from "@/components/dashboard/product-list";
 import { ProductToolsMenu } from "@/components/dashboard/product-tools-menu";
 import { Card, CardContent } from "@/components/ui/card";
@@ -13,7 +14,11 @@ interface Props {
 export default async function ProductosPage({ searchParams }: Props) {
   const params = await searchParams;
   const page = parseInt(params.page ?? "1", 10) || 1;
-  const result = await getProducts(page);
+
+  const [result, categories] = await Promise.all([
+    getProducts(page),
+    getAllCategories(),
+  ]);
 
   if (result.error) {
     return (
@@ -64,7 +69,7 @@ export default async function ProductosPage({ searchParams }: Props) {
         </div>
       </div>
 
-      <ProductList products={result.products} />
+      <ProductList products={result.products} categories={categories} />
 
       {result.totalPages > 1 && (
         <div className="flex items-center justify-between">
