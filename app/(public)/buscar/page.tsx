@@ -1,10 +1,19 @@
 import type { Metadata } from "next";
 import { SearchInput } from "@/components/search/search-input";
 import { ProductGrid } from "@/components/product/product-grid";
-import { getPublicProducts } from "@/lib/services/search";
+import { CategoryRow } from "@/components/category/category-row";
+import { FilterSheet } from "@/components/filters/filter-sheet";
+import { getPublicProducts, type SortOption } from "@/lib/services/search";
+import { getPublicCategories } from "@/lib/services/categories";
 
 interface Props {
-  searchParams: Promise<{ q?: string }>;
+  searchParams: Promise<{
+    q?: string;
+    category?: string;
+    minPrice?: string;
+    maxPrice?: string;
+    sort?: string;
+  }>;
 }
 
 export async function generateMetadata({ searchParams }: Props): Promise<Metadata> {
@@ -27,8 +36,22 @@ export async function generateMetadata({ searchParams }: Props): Promise<Metadat
 export default async function BuscarPage({ searchParams }: Props) {
   const params = await searchParams;
   const query = params.q?.trim() || "";
+  const activeCategory = params.category;
+  const minPrice = params.minPrice ? Number(params.minPrice) : undefined;
+  const maxPrice = params.maxPrice ? Number(params.maxPrice) : undefined;
+  const sort = (params.sort as SortOption) || undefined;
 
-  const { products, error } = await getPublicProducts(query || undefined, 48);
+  const [{ products, error }, categories] = await Promise.all([
+    getPublicProducts({
+      query: query || undefined,
+      category: activeCategory,
+      minPrice,
+      maxPrice,
+      sort,
+      limit: 48,
+    }),
+    getPublicCategories(),
+  ]);
 
   return (
     <div className="min-h-screen">
@@ -44,6 +67,18 @@ export default async function BuscarPage({ searchParams }: Props) {
       {/* Results */}
       <section className="py-8">
         <div className="container mx-auto px-4">
+          {/* Categories + Filters */}
+          <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex-1 overflow-hidden">
+              {categories.length > 0 && (
+                <CategoryRow categories={categories} activeCategory={activeCategory} />
+              )}
+            </div>
+            <div className="shrink-0">
+              <FilterSheet hasQuery={!!query} />
+            </div>
+          </div>
+
           {query && (
             <p className="mb-6 text-sm text-muted-foreground">
               {products.length > 0
@@ -65,6 +100,10 @@ export default async function BuscarPage({ searchParams }: Props) {
                     Intenta con otro termino de busqueda.
                   </p>
                 </>
+              ) : activeCategory ? (
+                <p className="text-muted-foreground">
+                  No hay productos en esta categoria.
+                </p>
               ) : (
                 <p className="text-muted-foreground">
                   No hay productos disponibles todavia.
