@@ -9,6 +9,7 @@ import { CategorySelector } from "@/components/dashboard/category-selector";
 import { isAllowedImageHost } from "@/lib/images/allowed-hosts";
 import type { CategoryWithParent } from "@/lib/services/categories";
 import type { ProductListItem } from "@/lib/services/products";
+import { hasAvailableStock, isInfiniteStock } from "@/lib/stock";
 import { cn } from "@/lib/utils";
 
 interface ProductListProps {
@@ -25,6 +26,10 @@ function formatPrice(min: number | null, max: number | null): string {
 }
 
 function stockLabel(stock: number): { text: string; className: string } {
+  if (isInfiniteStock(stock)) {
+    return { text: "Stock disponible", className: "text-emerald-700/90" };
+  }
+
   if (stock > 0) {
     return { text: `${stock} en stock`, className: "text-emerald-700/90" };
   }
@@ -203,7 +208,11 @@ function ProductRow({
                     ${variant.price.toLocaleString("es-AR")}
                   </div>
                   <div className={cn("text-right tabular-nums", vStock.className)}>
-                    {variant.stock > 0 ? variant.stock : "0"}
+                    {isInfiniteStock(variant.stock)
+                      ? "En stock"
+                      : hasAvailableStock(variant.stock)
+                        ? variant.stock
+                        : "0"}
                   </div>
                 </li>
               );

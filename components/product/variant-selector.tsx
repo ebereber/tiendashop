@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { cn } from "@/lib/utils";
+import { hasAvailableStock } from "@/lib/stock";
 
 interface Variant {
   id: string;
@@ -19,7 +20,7 @@ export function VariantSelector({ variants, onVariantChange }: VariantSelectorPr
   const [userSelectedVariantId, setUserSelectedVariantId] = useState<string | null>(null);
 
   const defaultVariant = useMemo(
-    () => variants.find((variant) => variant.stock > 0) ?? variants[0] ?? null,
+    () => variants.find((variant) => hasAvailableStock(variant.stock)) ?? variants[0] ?? null,
     [variants]
   );
 
@@ -42,7 +43,7 @@ export function VariantSelector({ variants, onVariantChange }: VariantSelectorPr
       <div className="flex flex-wrap gap-2">
         {variants.map((variant) => {
           const isSelected = selectedVariant?.id === variant.id;
-          const isOutOfStock = variant.stock === 0;
+          const isOutOfStock = !hasAvailableStock(variant.stock);
 
           return (
             <button
