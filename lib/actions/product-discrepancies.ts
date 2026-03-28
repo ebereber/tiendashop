@@ -34,6 +34,7 @@ interface LocalProduct {
   tiendanube_product_id: string;
   title: string;
   price_min: number | null;
+  price_max: number | null;
   has_stock: boolean;
 }
 
@@ -56,9 +57,13 @@ function getMainVariantData(tnProduct: TiendanubeProduct): {
   const main = sorted[0];
   const parsedPrice = parseFloat(main.price);
   const price = Number.isNaN(parsedPrice) ? null : parsedPrice;
-  const totalStock = variants.reduce((sum, v) => sum + (v.stock ?? 0), 0);
+  const hasStock = variants.some(
+    (variant) =>
+      variant.stock_management === false ||
+      (variant.stock_management === true && (variant.stock ?? 0) > 0)
+  );
 
-  return { price, hasStock: totalStock > 0 };
+  return { price, hasStock };
 }
 
 function formatPrice(value: number | null): string {
@@ -141,7 +146,7 @@ export async function getProductDiscrepancies(): Promise<DiscrepancyReport> {
   // Fetch local products
   const { data: localProducts, error: localError } = await supabaseAdmin
     .from("products")
-    .select("id, tiendanube_product_id, title, price_min, has_stock")
+    .select("id, tiendanube_product_id, title, price_min, price_max, has_stock")
     .eq("store_id", store.id);
 
   if (localError) {
@@ -203,35 +208,42 @@ export async function getProductDiscrepancies(): Promise<DiscrepancyReport> {
       });
     }
 
-    // Price mismatch (compare price_min with main variant price)
-    if (local.price_min === null && remotePrice !== null) {
+    // Price mismatch
+    // Use price_min if available, otherwise price_max (for out-of-stock products)
+    const localComparablePrice = local.price_min ?? local.price_max ?? null;
+
+    // Normalize: treat 0 and null as equivalent (both mean "no price")
+    const normalizedLocal = localComparablePrice === 0 ? null : localComparablePrice;
+    const normalizedRemote = remotePrice === 0 ? null : remotePrice;
+
+    if (normalizedLocal === null && normalizedRemote !== null) {
       discrepancies.push({
         tiendanubeProductId: tnId,
         localProductId: local.id,
         productTitle: remoteTitle,
         type: "price_mismatch",
-        localValue: formatPrice(local.price_min),
+        localValue: formatPrice(localComparablePrice),
         remoteValue: formatPrice(remotePrice),
       });
-    } else if (local.price_min !== null && remotePrice === null) {
+    } else if (normalizedLocal !== null && normalizedRemote === null) {
       discrepancies.push({
         tiendanubeProductId: tnId,
         localProductId: local.id,
         productTitle: remoteTitle,
         type: "price_mismatch",
-        localValue: formatPrice(local.price_min),
+        localValue: formatPrice(localComparablePrice),
         remoteValue: formatPrice(remotePrice),
       });
-    } else if (local.price_min !== null && remotePrice !== null) {
+    } else if (normalizedLocal !== null && normalizedRemote !== null) {
       // Allow small tolerance for floating point
-      const priceDiff = Math.abs(remotePrice - local.price_min);
+      const priceDiff = Math.abs(normalizedRemote - normalizedLocal);
       if (priceDiff > 0.01) {
         discrepancies.push({
           tiendanubeProductId: tnId,
           localProductId: local.id,
           productTitle: remoteTitle,
           type: "price_mismatch",
-          localValue: formatPrice(local.price_min),
+          localValue: formatPrice(localComparablePrice),
           remoteValue: formatPrice(remotePrice),
         });
       }

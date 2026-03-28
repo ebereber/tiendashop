@@ -432,6 +432,17 @@ interface UpsertProductResult {
   subcategoryId: string | null;
 }
 
+const INFINITE_STOCK_SENTINEL = 2147483647;
+
+function resolveVariantStock(variant: TiendanubeProduct["variants"][number]): number {
+  // Tiendanube: stock_management=false means unlimited stock; stock may come as null.
+  if (variant.stock_management === false) {
+    return INFINITE_STOCK_SENTINEL;
+  }
+
+  return variant.stock ?? 0;
+}
+
 async function upsertProduct(
   supabase: SupabaseClient<Database>,
   storeId: string,
@@ -450,10 +461,7 @@ async function upsertProduct(
   const priceMin = prices.length > 0 ? Math.min(...prices) : null;
   const priceMax = prices.length > 0 ? Math.max(...prices) : null;
 
-  // Calculate total stock
-  const totalStock = tnProduct.variants.reduce((sum, v) => {
-    return sum + (v.stock ?? 0);
-  }, 0);
+  const hasAnyStock = tnProduct.variants.some((v) => resolveVariantStock(v) > 0);
 
   // Assign category (always recalculate auto)
   const categoryAssignment = assignCategory(tnProduct);
@@ -484,7 +492,7 @@ async function upsertProduct(
     brand: tnProduct.brand,
     price_min: priceMin,
     price_max: priceMax,
-    has_stock: totalStock > 0,
+    has_stock: hasAnyStock,
     // Reactivate products previously disabled by store uninstallation.
     system_status: "visible" as Database["public"]["Enums"]["system_status"],
     system_status_reason: null,
@@ -580,7 +588,7 @@ async function insertVariants(
     title: buildVariantTitle(v.values),
     price: parseFloat(v.price) || 0,
     compare_price: v.compare_at_price ? parseFloat(v.compare_at_price) : null,
-    stock: v.stock ?? 0,
+    stock: resolveVariantStock(v),
     sku: v.sku,
     attributes: v.values.length > 0 ? v.values : null,
   }));
