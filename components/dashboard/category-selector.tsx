@@ -8,7 +8,7 @@ import {
   Pencil,
   RotateCcw,
 } from "lucide-react"
-import { useEffect, useMemo, useState } from "react"
+import { useMemo, useState } from "react"
 
 import { Button } from "@/components/ui/button"
 import {
@@ -59,11 +59,6 @@ export function CategorySelector({
   const [searchQuery, setSearchQuery] = useState("")
   const [breadcrumb, setBreadcrumb] = useState<BreadcrumbItem[]>([])
   const [currentParentId, setCurrentParentId] = useState<string | null>(null)
-
-  useEffect(() => {
-    setSelectedId(currentCategoryId)
-    setIsManualState(isManual)
-  }, [currentCategoryId, isManual])
 
   const categoryById = useMemo(
     () => new Map(categories.map((c) => [c.id, c])),

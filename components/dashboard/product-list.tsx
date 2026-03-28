@@ -83,7 +83,6 @@ function ProductRow({
   categories: CategoryWithParent[];
 }) {
   const canExpand = product.variantsCount > 1;
-  const ctaLabel = product.isActive ? "Archivar" : "Publicar";
   const priceLabel = formatPrice(product.priceMin, product.priceMax);
   const singleVariant = product.variantsCount === 1 ? product.variants[0] : null;
   const variantStock = singleVariant ? stockLabel(singleVariant.stock) : null;
@@ -169,6 +168,7 @@ function ProductRow({
         {/* Col 7: Category (hidden below lg) */}
         <div className="hidden lg:block">
           <CategorySelector
+            key={`${product.id}:${product.effectiveCategoryId ?? "none"}:${product.manualCategoryId ?? "auto"}`}
             productId={product.id}
             currentCategoryId={product.effectiveCategoryId}
             autoCategoryId={product.autoCategoryId}
