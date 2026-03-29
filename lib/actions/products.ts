@@ -57,7 +57,7 @@ export async function updateProductCategory(
     "update_product_manual_category",
     {
       p_product_id: product.id,
-      p_manual_category_id: categoryId,
+      p_manual_category_id: categoryId ?? undefined,
     }
   );
 

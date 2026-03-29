@@ -2,6 +2,7 @@ import Link from "next/link";
 
 import { getProducts } from "@/lib/services/products";
 import { getAllCategories } from "@/lib/services/categories";
+import { getCurrentStoreId, getProductClickCounts } from "@/lib/services/metrics";
 import { ProductList } from "@/components/dashboard/product-list";
 import { ProductToolsMenu } from "@/components/dashboard/product-tools-menu";
 import { Card, CardContent } from "@/components/ui/card";
@@ -15,10 +16,14 @@ export default async function ProductosPage({ searchParams }: Props) {
   const params = await searchParams;
   const page = parseInt(params.page ?? "1", 10) || 1;
 
-  const [result, categories] = await Promise.all([
+  const [result, categories, storeId] = await Promise.all([
     getProducts(page),
     getAllCategories(),
+    getCurrentStoreId(),
   ]);
+
+  // Fetch click counts if we have a store
+  const clickCounts = storeId ? await getProductClickCounts(storeId) : undefined;
 
   if (result.error) {
     return (
@@ -69,7 +74,7 @@ export default async function ProductosPage({ searchParams }: Props) {
         </div>
       </div>
 
-      <ProductList products={result.products} categories={categories} />
+      <ProductList products={result.products} categories={categories} clickCounts={clickCounts} />
 
       {result.totalPages > 1 && (
         <div className="flex items-center justify-between">

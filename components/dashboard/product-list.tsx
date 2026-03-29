@@ -15,6 +15,7 @@ import { cn } from "@/lib/utils";
 interface ProductListProps {
   products: ProductListItem[];
   categories: CategoryWithParent[];
+  clickCounts?: Map<string, number>;
 }
 
 function formatPrice(min: number | null, max: number | null): string {
@@ -76,11 +77,13 @@ function ProductRow({
   expanded,
   onToggle,
   categories,
+  clicks,
 }: {
   product: ProductListItem;
   expanded: boolean;
   onToggle: () => void;
   categories: CategoryWithParent[];
+  clicks: number;
 }) {
   const canExpand = product.variantsCount > 1;
   const priceLabel = formatPrice(product.priceMin, product.priceMax);
@@ -94,7 +97,7 @@ function ProductRow({
         - Mobile (5 cols): expand, image, info, price, actions
         - SM (6 cols): + stock
         - MD (7 cols): + state badge
-        - LG (8 cols): + category
+        - LG (9 cols): + category, clicks
       */}
       <div
         className={cn(
@@ -102,7 +105,7 @@ function ProductRow({
           "grid-cols-[1.5rem_2.5rem_1fr_5.5rem_auto]",
           "sm:grid-cols-[1.5rem_2.5rem_1fr_5.5rem_5rem_auto]",
           "md:grid-cols-[1.5rem_2.5rem_1fr_5.5rem_5rem_4.5rem_auto]",
-          "lg:grid-cols-[1.5rem_2.5rem_1fr_5.5rem_5rem_4.5rem_10rem_auto]"
+          "lg:grid-cols-[1.5rem_2.5rem_1fr_5.5rem_5rem_4.5rem_10rem_4rem_auto]"
         )}
       >
         {/* Col 1: Expand */}
@@ -177,7 +180,14 @@ function ProductRow({
           />
         </div>
 
-        {/* Col 8: Actions */}
+        {/* Col 8: Clicks (hidden below lg) */}
+        <div className="hidden text-right text-xs lg:block">
+          <span className="tabular-nums text-muted-foreground">
+            {clicks > 0 ? clicks.toLocaleString("es-AR") : "—"}
+          </span>
+        </div>
+
+        {/* Col 9: Actions */}
         <div className="flex items-center justify-end gap-1">
          {/*  <Button size="xs" variant={product.isActive ? "outline" : "default"} disabled>
             {ctaLabel}
@@ -224,7 +234,7 @@ function ProductRow({
   );
 }
 
-export function ProductList({ products, categories }: ProductListProps) {
+export function ProductList({ products, categories, clickCounts }: ProductListProps) {
   const [expandedRows, setExpandedRows] = useState<Record<string, boolean>>({});
 
   const toggleRow = (id: string) => {
@@ -241,6 +251,7 @@ export function ProductList({ products, categories }: ProductListProps) {
             expanded={!!expandedRows[product.id]}
             onToggle={() => toggleRow(product.id)}
             categories={categories}
+            clicks={clickCounts?.get(product.id) ?? 0}
           />
         ))}
       </div>

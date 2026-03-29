@@ -801,13 +801,28 @@ export type Database = {
     }
     Functions: {
       auth_user_id: { Args: never; Returns: string }
+      get_product_click_counts: {
+        Args: { p_store_id: string }
+        Returns: {
+          clicks: number
+          product_id: string
+        }[]
+      }
+      get_top_clicked_products: {
+        Args: { p_limit?: number; p_store_id: string }
+        Returns: {
+          clicks: number
+          product_id: string
+          title: string
+        }[]
+      }
       is_org_admin: { Args: { p_org_id: string }; Returns: boolean }
       is_org_member: { Args: { p_org_id: string }; Returns: boolean }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
       soft_delete_store: { Args: { p_store_id: string }; Returns: undefined }
       update_product_manual_category: {
-        Args: { p_manual_category_id: string | null; p_product_id: string }
+        Args: { p_manual_category_id?: string; p_product_id: string }
         Returns: undefined
       }
     }
