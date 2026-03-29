@@ -1,16 +1,22 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { getCurrentMembership } from "@/lib/auth/get-current-membership";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 
-interface UpdateCategoryResult {
+interface ActionResult {
   error?: string;
+}
+
+interface ToggleResult {
+  error?: string;
+  newStatus?: "active" | "paused";
 }
 
 export async function updateProductCategory(
   productId: string,
   categoryId: string | null
-): Promise<UpdateCategoryResult> {
+): Promise<ActionResult> {
   const membership = await getCurrentMembership();
   if (!membership) {
     return { error: "No hay sesion activa" };
@@ -67,4 +73,83 @@ export async function updateProductCategory(
   }
 
   return {};
+}
+
+/**
+ * Toggle product merchant_status between 'active' and 'paused'.
+ * - Pausing is always allowed
+ * - Publishing requires system_status = 'visible'
+ */
+export async function toggleProductMerchantStatus(
+  productId: string
+): Promise<ToggleResult> {
+  const membership = await getCurrentMembership();
+  if (!membership) {
+    return { error: "No hay sesion activa" };
+  }
+
+  // Get store for this organization
+  const { data: store, error: storeError } = await supabaseAdmin
+    .from("stores")
+    .select("id")
+    .eq("organization_id", membership.organization_id)
+    .is("deleted_at", null)
+    .single();
+
+  if (storeError || !store) {
+    return { error: "No hay tienda conectada" };
+  }
+
+  // Get product with current status - verify ownership
+  const { data: product, error: productError } = await supabaseAdmin
+    .from("products")
+    .select("id, merchant_status, system_status")
+    .eq("id", productId)
+    .eq("store_id", store.id)
+    .single();
+
+  if (productError || !product) {
+    return { error: "Producto no encontrado" };
+  }
+
+  const currentStatus = product.merchant_status as "active" | "paused";
+  const systemStatus = product.system_status as string;
+
+  // Determine new status
+  let newStatus: "active" | "paused";
+
+  if (currentStatus === "active") {
+    // Pausing is always allowed
+    newStatus = "paused";
+  } else {
+    // Attempting to publish - check system_status
+    if (systemStatus !== "visible") {
+      return {
+        error:
+          "Este producto tiene problemas que impiden publicarlo. Revisa el estado en el panel de discrepancias.",
+      };
+    }
+    newStatus = "active";
+  }
+
+  // Update merchant_status
+  const { data: updatedRows, error: updateError } = await supabaseAdmin
+    .from("products")
+    .update({ merchant_status: newStatus })
+    .eq("id", productId)
+    .eq("store_id", store.id)
+    .select("id");
+
+  if (updateError) {
+    console.error("[Products] toggleProductMerchantStatus error:", updateError);
+    return { error: "Error al actualizar el estado del producto" };
+  }
+
+  if (!updatedRows || updatedRows.length !== 1) {
+    return { error: "No se pudo actualizar el producto." };
+  }
+
+  revalidatePath("/dashboard/productos");
+
+  return { newStatus };
 }

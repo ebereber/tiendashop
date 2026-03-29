@@ -134,6 +134,7 @@ export interface ProductListItem {
   priceMax: number | null;
   hasStock: boolean;
   isActive: boolean;
+  systemStatus: "visible" | "hidden" | "error";
   sku: string | null;
   variantsCount: number;
   variants: ProductVariantListItem[];
@@ -216,6 +217,7 @@ export async function getProducts(page: number = 1): Promise<ProductsResult> {
       price_max,
       has_stock,
       merchant_status,
+      system_status,
       auto_category_id,
       manual_category_id,
       product_images (
@@ -280,6 +282,7 @@ export async function getProducts(page: number = 1): Promise<ProductsResult> {
       priceMax: product.price_max,
       hasStock: product.has_stock,
       isActive: product.merchant_status === "active",
+      systemStatus: product.system_status as "visible" | "hidden" | "error",
       sku,
       variantsCount: variants.length,
       variants: normalizedVariants,
