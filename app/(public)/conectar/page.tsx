@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { getServerUser } from "@/lib/auth/get-server-user";
@@ -9,7 +10,19 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 
-export default async function ConectarPage({
+export default function ConectarPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ next?: string }>;
+}) {
+  return (
+    <Suspense fallback={<ConectarSkeleton />}>
+      <ConectarContent searchParams={searchParams} />
+    </Suspense>
+  );
+}
+
+async function ConectarContent({
   searchParams,
 }: {
   searchParams: Promise<{ next?: string }>;
@@ -36,12 +49,27 @@ export default async function ConectarPage({
             Al conectar tu tienda, podremos sincronizar tus productos
             automaticamente y mostrarlos a miles de compradores.
           </p>
-          <Link
-            href="/api/tiendanube/connect"
-            className="w-full"
-          >
+          <Link href="/api/tiendanube/connect" className="w-full">
             Conectar con Tiendanube
           </Link>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+function ConectarSkeleton() {
+  return (
+    <div className="flex min-h-svh w-full items-center justify-center p-6 md:p-10">
+      <Card className="w-full max-w-md">
+        <CardHeader>
+          <div className="animate-pulse space-y-2">
+            <div className="h-6 w-48 rounded bg-muted" />
+            <div className="h-4 w-64 rounded bg-muted" />
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="animate-pulse h-10 w-full rounded bg-muted" />
         </CardContent>
       </Card>
     </div>

@@ -1,4 +1,5 @@
 import { cache } from "react";
+import { cacheLife, cacheTag } from "next/cache";
 import { createPublicClient } from "@/lib/supabase/public";
 import type { ProductWithStore } from "./search";
 
@@ -24,7 +25,11 @@ export interface StoreProductsParams {
   limit?: number;
 }
 
-export const getStoreBySlug = cache(async (slug: string): Promise<PublicStore | null> => {
+export async function getStoreBySlug(slug: string): Promise<PublicStore | null> {
+  "use cache";
+  cacheLife("hours");
+  cacheTag("stores", `store-${slug}`);
+
   const supabase = createPublicClient();
 
   const { data, error } = await supabase
@@ -41,7 +46,7 @@ export const getStoreBySlug = cache(async (slug: string): Promise<PublicStore | 
   }
 
   return data;
-});
+}
 
 // Get categories present in visible products for a specific store
 // Uses product_categories which reflects the effective category (coalesce of manual/auto)

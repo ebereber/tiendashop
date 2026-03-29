@@ -1,9 +1,8 @@
 /** @type {import('next').NextConfig} */
 // next.config.ts / next.config.mjs
 const nextConfig = {
-   
+  cacheComponents: true,
   experimental: {
-    useCache: true,
     serverActions: {
       allowedOrigins: [
         "localhost:3000",

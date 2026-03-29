@@ -1,26 +1,26 @@
-import Link from "next/link";
-import Image from "next/image";
-import { isAllowedImageHost } from "@/lib/images/allowed-hosts";
-import type { ProductWithStore } from "@/lib/services/search";
+import { isAllowedImageHost } from "@/lib/images/allowed-hosts"
+import type { ProductWithStore } from "@/lib/services/search"
+import Image from "next/image"
+import Link from "next/link"
 
 interface ProductCardProps {
-  product: ProductWithStore;
+  product: ProductWithStore
 }
 
 export function ProductCard({ product }: ProductCardProps) {
-  const { id, title, priceMin, storeName, imageUrl } = product;
+  const { id, title, priceMin, storeName, imageUrl } = product
 
   const formattedPrice =
     priceMin != null && priceMin > 0
       ? `$${priceMin.toLocaleString("es-AR")}`
-      : null;
+      : null
 
   return (
     <Link
       href={`/producto/${id}`}
-      className="group block overflow-hidden rounded-lg border bg-card transition-colors hover:border-foreground/20"
+      className="group block transition-colors hover:border-foreground/20"
     >
-      <div className="relative aspect-square bg-muted">
+      <div className="relative aspect-square overflow-hidden rounded-lg bg-muted">
         {imageUrl ? (
           isAllowedImageHost(imageUrl) ? (
             <Image
@@ -44,15 +44,15 @@ export function ProductCard({ product }: ProductCardProps) {
           </div>
         )}
       </div>
-      <div className="p-3">
-        <h3 className="line-clamp-2 text-sm font-medium leading-tight group-hover:underline">
+      <div className="space-y-1 p-3">
+        <p className="mt-1 text-xs text-muted-foreground">{storeName}</p>
+        <h3 className="line-clamp-2 text-sm leading-tight font-medium group-hover:underline">
           {title}
         </h3>
         {formattedPrice && (
           <p className="mt-1 text-base font-semibold">{formattedPrice}</p>
         )}
-        <p className="mt-1 text-xs text-muted-foreground">{storeName}</p>
       </div>
     </Link>
-  );
+  )
 }

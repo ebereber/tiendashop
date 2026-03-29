@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import Link from "next/link";
 import { SearchInput } from "@/components/search/search-input";
 import { ProductGrid } from "@/components/product/product-grid";
@@ -5,19 +6,14 @@ import { CategoryRow } from "@/components/category/category-row";
 import { getPublicProducts } from "@/lib/services/search";
 import { getPublicCategories } from "@/lib/services/categories";
 import { Button } from "@/components/ui/button";
+import { ProductGridSkeleton } from "@/components/product/product-grid-skeleton";
 
 interface Props {
   searchParams: Promise<{ category?: string }>;
 }
 
 export default async function HomePage({ searchParams }: Props) {
-  const params = await searchParams;
-  const activeCategory = params.category;
-
-  const [{ products, error }, categories] = await Promise.all([
-    getPublicProducts({ category: activeCategory, limit: 24 }),
-    getPublicCategories(),
-  ]);
+  const categories = await getPublicCategories();
 
   return (
     <div className="min-h-screen">
@@ -41,33 +37,9 @@ export default async function HomePage({ searchParams }: Props) {
       {/* Products section */}
       <section className="py-12">
         <div className="container mx-auto px-4">
-          <div className="mb-6 flex items-center justify-between">
-            <h2 className="text-xl font-semibold">
-              {activeCategory ? "Productos" : "Productos recientes"}
-            </h2>
-            <Button variant="outline" size="sm" nativeButton={false} render={<Link href="/buscar" />}>
-              Ver todos
-            </Button>
-          </div>
-
-          {/* Categories */}
-          {categories.length > 0 && (
-            <div className="mb-6">
-              <CategoryRow categories={categories} activeCategory={activeCategory} />
-            </div>
-          )}
-
-          {error ? (
-            <p className="text-center text-muted-foreground">{error}</p>
-          ) : products.length === 0 ? (
-            <p className="text-center text-muted-foreground">
-              {activeCategory
-                ? "No hay productos en esta categoria."
-                : "No hay productos disponibles todavia."}
-            </p>
-          ) : (
-            <ProductGrid products={products} />
-          )}
+          <Suspense fallback={<ProductGridSkeleton />}>
+            <HomeProducts searchParams={searchParams} categories={categories} />
+          </Suspense>
         </div>
       </section>
 
@@ -84,5 +56,52 @@ export default async function HomePage({ searchParams }: Props) {
         </div>
       </section>
     </div>
+  );
+}
+
+async function HomeProducts({
+  searchParams,
+  categories,
+}: {
+  searchParams: Promise<{ category?: string }>;
+  categories: Awaited<ReturnType<typeof getPublicCategories>>;
+}) {
+  const params = await searchParams;
+  const activeCategory = params.category;
+  const { products, error } = await getPublicProducts({
+    category: activeCategory,
+    limit: 24,
+  });
+
+  return (
+    <>
+      <div className="mb-6 flex items-center justify-between">
+        <h2 className="text-xl font-semibold">
+          {activeCategory ? "Productos" : "Productos recientes"}
+        </h2>
+        <Button variant="outline" size="sm" nativeButton={false} render={<Link href="/buscar" />}>
+          Ver todos
+        </Button>
+      </div>
+
+      {/* Categories */}
+      {categories.length > 0 && (
+        <div className="mb-6">
+          <CategoryRow categories={categories} activeCategory={activeCategory} />
+        </div>
+      )}
+
+      {error ? (
+        <p className="text-center text-muted-foreground">{error}</p>
+      ) : products.length === 0 ? (
+        <p className="text-center text-muted-foreground">
+          {activeCategory
+            ? "No hay productos en esta categoria."
+            : "No hay productos disponibles todavia."}
+        </p>
+      ) : (
+        <ProductGrid products={products} />
+      )}
+    </>
   );
 }

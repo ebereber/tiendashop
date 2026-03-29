@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { revalidateTag } from "next/cache";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { parseSignedOAuthState } from "@/lib/tiendanube/oauth-state";
 import { createTiendanubeClient } from "@/lib/tiendanube/client";
@@ -172,7 +173,7 @@ export async function GET(request: NextRequest) {
   // Check if store already exists (including soft-deleted)
   const { data: storesByTiendanubeId, error: storesLookupError } = await supabaseAdmin
     .from("stores")
-    .select("id, organization_id, deleted_at")
+    .select("id, organization_id, deleted_at, slug")
     .eq("tiendanube_store_id", tiendanubeStoreId);
 
   if (storesLookupError) {
@@ -244,6 +245,12 @@ export async function GET(request: NextRequest) {
         });
         return NextResponse.redirect(`${appUrl}/conectar?error=store_reactivate`);
       }
+
+      // Invalidate store caches after reactivation
+      revalidateTag("stores", "max");
+      if (existingStore.slug) {
+        revalidateTag(`store-${existingStore.slug}`, "max");
+      }
     } else {
       // Update access token for existing active store
       const { error: updateError } = await supabaseAdmin
@@ -255,6 +262,12 @@ export async function GET(request: NextRequest) {
 
       if (updateError) {
         console.error("[Tiendanube OAuth] Token update failed:", updateError);
+      } else {
+        // Invalidate store caches after token update (reconnect)
+        revalidateTag("stores", "max");
+        if (existingStore.slug) {
+          revalidateTag(`store-${existingStore.slug}`, "max");
+        }
       }
     }
 
@@ -391,6 +404,10 @@ export async function GET(request: NextRequest) {
     storeName,
     organizationId: organization.id,
   });
+
+  // Invalidate store caches after new store creation
+  revalidateTag("stores", "max");
+  revalidateTag(`store-${storeSlug}`, "max");
 
   // Register webhooks (non-blocking)
   const webhookUrl = `${appUrl}/api/tiendanube/webhook`;

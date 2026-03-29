@@ -1,7 +1,7 @@
+import { cacheLife, cacheTag } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { createPublicClient } from "@/lib/supabase/public";
 import { getCurrentMembership } from "@/lib/auth/get-current-membership";
-import { cache } from "react";
 
 const PAGE_SIZE = 50;
 
@@ -33,7 +33,11 @@ export interface ProductWithDetails {
   variants: ProductVariant[];
 }
 
-export const getPublicProductById = cache(async (id: string): Promise<ProductWithDetails | null> => {
+export async function getPublicProductById(id: string): Promise<ProductWithDetails | null> {
+  "use cache";
+  cacheLife("minutes");
+  cacheTag("products", `product-${id}`);
+
   const supabase = createPublicClient();
 
   const { data, error } = await supabase
@@ -114,7 +118,7 @@ export const getPublicProductById = cache(async (id: string): Promise<ProductWit
     images: sortedImages,
     variants: sortedVariants,
   };
-});
+}
 
 // --- Dashboard products ---
 

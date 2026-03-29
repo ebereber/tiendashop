@@ -1,6 +1,6 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { getCurrentMembership } from "@/lib/auth/get-current-membership";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 
@@ -71,6 +71,9 @@ export async function updateProductCategory(
     console.error("[Products] update_product_manual_category rpc error:", updateError);
     return { error: "Error al actualizar categoria" };
   }
+
+  revalidateTag("products", "max");
+  revalidateTag(`product-${productId}`, "max");
 
   return {};
 }
@@ -150,6 +153,8 @@ export async function toggleProductMerchantStatus(
   }
 
   revalidatePath("/dashboard/productos");
+  revalidateTag("products", "max");
+  revalidateTag(`product-${productId}`, "max");
 
   return { newStatus };
 }

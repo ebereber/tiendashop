@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ExternalLink } from "lucide-react";
@@ -7,10 +8,12 @@ import {
   getPublicProductsByStoreId,
   getCategoriesByStore,
   type StoreSortOption,
+  type StoreProductsParams,
 } from "@/lib/services/stores";
 import { ProductGrid } from "@/components/product/product-grid";
 import { CategoryRow } from "@/components/category/category-row";
 import { FilterSheet } from "@/components/filters/filter-sheet";
+import { ProductGridSkeleton } from "@/components/product/product-grid-skeleton";
 
 interface Props {
   params: Promise<{ slug: string }>;
@@ -46,23 +49,6 @@ export default async function TiendaPage({ params, searchParams }: Props) {
     notFound();
   }
 
-  const queryParams = await searchParams;
-  const activeCategory = queryParams.category;
-  const minPrice = queryParams.minPrice ? Number(queryParams.minPrice) : undefined;
-  const maxPrice = queryParams.maxPrice ? Number(queryParams.maxPrice) : undefined;
-  const sort = (queryParams.sort as StoreSortOption) || undefined;
-
-  const [products, categories] = await Promise.all([
-    getPublicProductsByStoreId(store.id, {
-      category: activeCategory,
-      minPrice,
-      maxPrice,
-      sort,
-      limit: 48,
-    }),
-    getCategoriesByStore(store.id),
-  ]);
-
   const externalUrl = store.domain
     ? `https://${store.domain}`
     : `https://${store.slug}.mitiendanube.com`;
@@ -88,44 +74,84 @@ export default async function TiendaPage({ params, searchParams }: Props) {
       {/* Products */}
       <section className="py-8">
         <div className="container mx-auto px-4">
-          {/* Categories + Filters */}
-          {(categories.length > 0 || products.length > 0) && (
-            <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-              <div className="flex-1 overflow-hidden">
-                {categories.length > 0 && (
-                  <CategoryRow categories={categories} activeCategory={activeCategory} />
-                )}
-              </div>
-              <div className="shrink-0">
-                <FilterSheet hasQuery={false} />
-              </div>
-            </div>
-          )}
-
-          {products.length === 0 ? (
-            <div className="py-12 text-center">
-              <p className="text-muted-foreground">
-                {activeCategory
-                  ? "No hay productos en esta categoria."
-                  : "Esta tienda no tiene productos disponibles por el momento."}
-              </p>
-              <Link
-                href="/"
-                className="mt-4 inline-block text-sm text-primary hover:underline"
-              >
-                Volver al inicio
-              </Link>
-            </div>
-          ) : (
-            <>
-              <p className="mb-6 text-sm text-muted-foreground">
-                {products.length} producto{products.length !== 1 ? "s" : ""}
-              </p>
-              <ProductGrid products={products} />
-            </>
-          )}
+          <Suspense fallback={<ProductGridSkeleton />}>
+            <StoreProducts storeId={store.id} searchParams={searchParams} />
+          </Suspense>
         </div>
       </section>
     </div>
+  );
+}
+
+async function StoreProducts({
+  storeId,
+  searchParams,
+}: {
+  storeId: string;
+  searchParams: Promise<{
+    category?: string;
+    minPrice?: string;
+    maxPrice?: string;
+    sort?: string;
+  }>;
+}) {
+  const queryParams = await searchParams;
+  const activeCategory = queryParams.category;
+  const minPrice = queryParams.minPrice ? Number(queryParams.minPrice) : undefined;
+  const maxPrice = queryParams.maxPrice ? Number(queryParams.maxPrice) : undefined;
+  const sort = (queryParams.sort as StoreSortOption) || undefined;
+
+  const productParams: StoreProductsParams = {
+    category: activeCategory,
+    minPrice,
+    maxPrice,
+    sort,
+    limit: 48,
+  };
+
+  const [products, categories] = await Promise.all([
+    getPublicProductsByStoreId(storeId, productParams),
+    getCategoriesByStore(storeId),
+  ]);
+
+  return (
+    <>
+      {/* Categories + Filters */}
+      {(categories.length > 0 || products.length > 0) && (
+        <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex-1 overflow-hidden">
+            {categories.length > 0 && (
+              <CategoryRow categories={categories} activeCategory={activeCategory} />
+            )}
+          </div>
+          <div className="shrink-0">
+            <FilterSheet hasQuery={false} />
+          </div>
+        </div>
+      )}
+
+      {products.length === 0 ? (
+        <div className="py-12 text-center">
+          <p className="text-muted-foreground">
+            {activeCategory
+              ? "No hay productos en esta categoria."
+              : "Esta tienda no tiene productos disponibles por el momento."}
+          </p>
+          <Link
+            href="/"
+            className="mt-4 inline-block text-sm text-primary hover:underline"
+          >
+            Volver al inicio
+          </Link>
+        </div>
+      ) : (
+        <>
+          <p className="mb-6 text-sm text-muted-foreground">
+            {products.length} producto{products.length !== 1 ? "s" : ""}
+          </p>
+          <ProductGrid products={products} />
+        </>
+      )}
+    </>
   );
 }

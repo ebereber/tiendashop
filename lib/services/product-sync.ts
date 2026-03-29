@@ -1,4 +1,5 @@
 import { SupabaseClient } from "@supabase/supabase-js";
+import { revalidateTag } from "next/cache";
 import { createTiendanubeClient } from "@/lib/tiendanube/client";
 import type { TiendanubeProduct } from "@/lib/tiendanube/types";
 import type { Database } from "@/lib/supabase/database.types";
@@ -263,6 +264,9 @@ export async function syncStoreProducts(params: SyncParams): Promise<SyncResult>
     };
   }
 
+  // Invalidate cache after successful sync (stale-while-revalidate)
+  revalidateTag("products", "max");
+
   return {
     success: !hadErrors,
     productsProcessed,
@@ -286,6 +290,19 @@ export async function syncSingleProduct(
   storeId: string,
   tnProduct: TiendanubeProduct
 ): Promise<SingleProductSyncResult> {
+  // Track if any mutations occurred (for cache invalidation on partial failure)
+  let hasMutated = false;
+  let mutatedProductId: string | null = null;
+
+  const invalidateIfMutated = () => {
+    if (hasMutated) {
+      revalidateTag("products", "max");
+      if (mutatedProductId) {
+        revalidateTag(`product-${mutatedProductId}`, "max");
+      }
+    }
+  };
+
   try {
     // Load category cache
     const { data: categoriesData, error: categoriesError } = await supabase
@@ -326,6 +343,10 @@ export async function syncSingleProduct(
       };
     }
 
+    // Mark mutation occurred (product was upserted)
+    hasMutated = true;
+    mutatedProductId = upsertResult.productId;
+
     // Assign categories
     try {
       await assignProductCategories(
@@ -338,6 +359,7 @@ export async function syncSingleProduct(
     } catch (err) {
       const message =
         err instanceof Error ? err.message : "error al asignar categorias";
+      invalidateIfMutated();
       return {
         success: false,
         productId: upsertResult.productId,
@@ -354,6 +376,7 @@ export async function syncSingleProduct(
 
     if (deleteVariantsError) {
       console.error("[Sync] Variants delete error:", deleteVariantsError);
+      invalidateIfMutated();
       return {
         success: false,
         productId: upsertResult.productId,
@@ -368,6 +391,7 @@ export async function syncSingleProduct(
       tnProduct
     );
     if (variantResult.error) {
+      invalidateIfMutated();
       return {
         success: false,
         productId: upsertResult.productId,
@@ -384,6 +408,7 @@ export async function syncSingleProduct(
 
     if (deleteImagesError) {
       console.error("[Sync] Images delete error:", deleteImagesError);
+      invalidateIfMutated();
       return {
         success: false,
         productId: upsertResult.productId,
@@ -398,6 +423,7 @@ export async function syncSingleProduct(
       tnProduct
     );
     if (imageResult.error) {
+      invalidateIfMutated();
       return {
         success: false,
         productId: upsertResult.productId,
@@ -405,6 +431,9 @@ export async function syncSingleProduct(
         error: imageResult.error,
       };
     }
+
+    // Success: invalidate cache for the mutated product
+    invalidateIfMutated();
 
     return {
       success: true,
@@ -414,9 +443,10 @@ export async function syncSingleProduct(
     };
   } catch (err) {
     console.error("[Sync] syncSingleProduct error:", err);
+    invalidateIfMutated();
     return {
       success: false,
-      productId: null,
+      productId: mutatedProductId,
       isNew: false,
       error: "Error inesperado",
     };

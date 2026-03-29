@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ChevronRight } from "lucide-react";
@@ -10,6 +11,7 @@ import {
 } from "@/lib/services/categories";
 import { ProductGrid } from "@/components/product/product-grid";
 import { CategoryNav } from "@/components/category/category-nav";
+import { ProductGridSkeleton } from "@/components/product/product-grid-skeleton";
 
 interface Props {
   params: Promise<{ slug: string; childSlug: string }>;
@@ -33,16 +35,14 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
 export default async function SubcategoriaPage({ params }: Props) {
   const { slug: parentSlug, childSlug } = await params;
-  const result = await getPublicSubcategoryBySlugs(parentSlug, childSlug);
+  const [result, parentCategory] = await Promise.all([
+    getPublicSubcategoryBySlugs(parentSlug, childSlug),
+    getPublicCategoryBySlug(parentSlug),
+  ]);
 
   if (!result) {
     notFound();
   }
-
-  const [products, parentCategory] = await Promise.all([
-    getPublicProductsBySubcategorySlug(parentSlug, childSlug),
-    getPublicCategoryBySlug(parentSlug),
-  ]);
 
   return (
     <div className="min-h-screen">
@@ -80,28 +80,52 @@ export default async function SubcategoriaPage({ params }: Props) {
       {/* Products */}
       <section className="py-8">
         <div className="container mx-auto px-4">
-          {products.length === 0 ? (
-            <div className="py-12 text-center">
-              <p className="text-muted-foreground">
-                No hay productos disponibles en esta categoria por el momento.
-              </p>
-              <Link
-                href={`/categoria/${parentSlug}`}
-                className="mt-4 inline-block text-sm text-primary hover:underline"
-              >
-                Ver todos los productos de {result.parent.name}
-              </Link>
-            </div>
-          ) : (
-            <>
-              <p className="mb-6 text-sm text-muted-foreground">
-                {products.length} producto{products.length !== 1 ? "s" : ""}
-              </p>
-              <ProductGrid products={products} />
-            </>
-          )}
+          <Suspense fallback={<ProductGridSkeleton />}>
+            <SubcategoryProducts
+              parentSlug={parentSlug}
+              childSlug={childSlug}
+              parentName={result.parent.name}
+            />
+          </Suspense>
         </div>
       </section>
     </div>
+  );
+}
+
+async function SubcategoryProducts({
+  parentSlug,
+  childSlug,
+  parentName,
+}: {
+  parentSlug: string;
+  childSlug: string;
+  parentName: string;
+}) {
+  const products = await getPublicProductsBySubcategorySlug(parentSlug, childSlug);
+
+  if (products.length === 0) {
+    return (
+      <div className="py-12 text-center">
+        <p className="text-muted-foreground">
+          No hay productos disponibles en esta categoria por el momento.
+        </p>
+        <Link
+          href={`/categoria/${parentSlug}`}
+          className="mt-4 inline-block text-sm text-primary hover:underline"
+        >
+          Ver todos los productos de {parentName}
+        </Link>
+      </div>
+    );
+  }
+
+  return (
+    <>
+      <p className="mb-6 text-sm text-muted-foreground">
+        {products.length} producto{products.length !== 1 ? "s" : ""}
+      </p>
+      <ProductGrid products={products} />
+    </>
   );
 }

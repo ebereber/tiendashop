@@ -1,4 +1,5 @@
 import { cache } from "react";
+import { cacheLife, cacheTag } from "next/cache";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { createPublicClient } from "@/lib/supabase/public";
 import type { ProductWithStore } from "./search";
@@ -35,8 +36,11 @@ export interface CategoryNavItem {
 }
 
 // Categorías son estáticas — solo cambian via migración + redeploy.
-// Usa cache() de React para deduplicar dentro del mismo request.
-export const getAllCategories = cache(async (): Promise<CategoryWithParent[]> => {
+export async function getAllCategories(): Promise<CategoryWithParent[]> {
+  "use cache";
+  cacheLife("days");
+  cacheTag("categories");
+
   const { data, error } = await supabaseAdmin
     .from("categories")
     .select("id, slug, path, name, parent_id, depth")
@@ -56,12 +60,16 @@ export const getAllCategories = cache(async (): Promise<CategoryWithParent[]> =>
     parentId: cat.parent_id,
     depth: cat.depth,
   }));
-});
+}
 
 // Categorías con al menos 1 producto visible en la plataforma
 // Solo categorías de nivel 0 (principales) para la navegación pública
 // Usa product_categories que refleja la categoría efectiva (coalesce de manual/auto)
-export const getPublicCategories = cache(async (): Promise<PublicCategory[]> => {
+export async function getPublicCategories(): Promise<PublicCategory[]> {
+  "use cache";
+  cacheLife("hours");
+  cacheTag("categories", "products");
+
   const supabase = createPublicClient();
 
   // Get category IDs from product_categories for visible products
@@ -121,61 +129,65 @@ export const getPublicCategories = cache(async (): Promise<PublicCategory[]> => 
     path: c.path,
     name: c.name,
   }));
-});
+}
 
 // Get a main category by path segment with its subcategories
 // URL: /categoria/moda → pathSegment = 'moda'
 // URL: /categoria/hogar-deco → pathSegment = 'hogar-deco'
-export const getPublicCategoryBySlug = cache(
-  async (pathSegment: string): Promise<PublicCategoryDetails | null> => {
-    const supabase = createPublicClient();
+export async function getPublicCategoryBySlug(
+  pathSegment: string
+): Promise<PublicCategoryDetails | null> {
+  "use cache";
+  cacheLife("hours");
+  cacheTag("categories", `category-${pathSegment}`);
 
-    // Get the category by path (path matches URL segment for depth=0)
-    const { data: category, error } = await supabase
-      .from("categories")
-      .select("id, slug, name, parent_id, depth, path")
-      .eq("path", pathSegment)
-      .eq("depth", 0)
-      .maybeSingle();
+  const supabase = createPublicClient();
 
-    if (error) {
-      console.error("[Categories] getPublicCategoryBySlug error:", error);
-      return null;
-    }
+  // Get the category by path (path matches URL segment for depth=0)
+  const { data: category, error } = await supabase
+    .from("categories")
+    .select("id, slug, name, parent_id, depth, path")
+    .eq("path", pathSegment)
+    .eq("depth", 0)
+    .maybeSingle();
 
-    if (!category) {
-      return null;
-    }
-
-    // Get subcategories - return the child segment of path for URL building
-    const { data: subcategories, error: subError } = await supabase
-      .from("categories")
-      .select("path, name")
-      .eq("parent_id", category.id)
-      .order("name");
-
-    if (subError) {
-      console.error("[Categories] getPublicCategoryBySlug subcategories error:", subError);
-    }
-
-    return {
-      id: category.id,
-      slug: category.path, // Use path for URL building
-      name: category.name,
-      parentId: category.parent_id,
-      depth: category.depth,
-      subcategories: (subcategories ?? []).map((s) => {
-        // Extract child segment from path (e.g., 'moda/remeras' → 'remeras')
-        const childSegment = s.path.split("/").pop() ?? s.path;
-        return {
-          slug: childSegment,
-          path: childSegment,
-          name: s.name,
-        };
-      }),
-    };
+  if (error) {
+    console.error("[Categories] getPublicCategoryBySlug error:", error);
+    return null;
   }
-);
+
+  if (!category) {
+    return null;
+  }
+
+  // Get subcategories - return the child segment of path for URL building
+  const { data: subcategories, error: subError } = await supabase
+    .from("categories")
+    .select("path, name")
+    .eq("parent_id", category.id)
+    .order("name");
+
+  if (subError) {
+    console.error("[Categories] getPublicCategoryBySlug subcategories error:", subError);
+  }
+
+  return {
+    id: category.id,
+    slug: category.path, // Use path for URL building
+    name: category.name,
+    parentId: category.parent_id,
+    depth: category.depth,
+    subcategories: (subcategories ?? []).map((s) => {
+      // Extract child segment from path (e.g., 'moda/remeras' → 'remeras')
+      const childSegment = s.path.split("/").pop() ?? s.path;
+      return {
+        slug: childSegment,
+        path: childSegment,
+        name: s.name,
+      };
+    }),
+  };
+}
 
 // Get a subcategory by path segments
 // URL: /categoria/moda/remeras → parentSegment = 'moda', childSegment = 'remeras'
@@ -399,36 +411,38 @@ export async function getPublicProductsBySubcategorySlug(
 }
 
 // Get all main categories with their subcategories for navigation
-export const getPublicCategoryNavigation = cache(
-  async (): Promise<CategoryNavItem[]> => {
-    const supabase = createPublicClient();
+export async function getPublicCategoryNavigation(): Promise<CategoryNavItem[]> {
+  "use cache";
+  cacheLife("days");
+  cacheTag("categories", "navigation");
 
-    // Get all categories
-    const { data: categories, error } = await supabase
-      .from("categories")
-      .select("id, slug, path, name, parent_id, depth")
-      .order("name");
+  const supabase = createPublicClient();
 
-    if (error) {
-      console.error("[Categories] getPublicCategoryNavigation error:", error);
-      return [];
-    }
+  // Get all categories
+  const { data: categories, error } = await supabase
+    .from("categories")
+    .select("id, slug, path, name, parent_id, depth")
+    .order("name");
 
-    // Build navigation structure
-    const mainCategories = (categories ?? []).filter((c) => c.depth === 0);
-    const subcategories = (categories ?? []).filter((c) => c.depth === 1);
-
-    return mainCategories.map((main) => ({
-      slug: main.slug,
-      path: main.path,
-      name: main.name,
-      subcategories: subcategories
-        .filter((sub) => sub.parent_id === main.id)
-        .map((sub) => ({
-          slug: sub.slug,
-          path: sub.path.split("/").pop() ?? sub.path,
-          name: sub.name,
-        })),
-    }));
+  if (error) {
+    console.error("[Categories] getPublicCategoryNavigation error:", error);
+    return [];
   }
-);
+
+  // Build navigation structure
+  const mainCategories = (categories ?? []).filter((c) => c.depth === 0);
+  const subcategories = (categories ?? []).filter((c) => c.depth === 1);
+
+  return mainCategories.map((main) => ({
+    slug: main.slug,
+    path: main.path,
+    name: main.name,
+    subcategories: subcategories
+      .filter((sub) => sub.parent_id === main.id)
+      .map((sub) => ({
+        slug: sub.slug,
+        path: sub.path.split("/").pop() ?? sub.path,
+        name: sub.name,
+      })),
+  }));
+}

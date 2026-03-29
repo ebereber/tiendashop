@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ChevronRight } from "lucide-react";
@@ -10,6 +11,7 @@ import {
 } from "@/lib/services/categories";
 import { ProductGrid } from "@/components/product/product-grid";
 import { CategoryNav } from "@/components/category/category-nav";
+import { ProductGridSkeleton } from "@/components/product/product-grid-skeleton";
 
 interface Props {
   params: Promise<{ slug: string }>;
@@ -33,16 +35,14 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
 export default async function CategoriaPage({ params }: Props) {
   const { slug } = await params;
-  const category = await getPublicCategoryBySlug(slug);
+  const [category, allCategories] = await Promise.all([
+    getPublicCategoryBySlug(slug),
+    getPublicCategories(),
+  ]);
 
   if (!category) {
     notFound();
   }
-
-  const [products, allCategories] = await Promise.all([
-    getPublicProductsByCategorySlug(slug),
-    getPublicCategories(),
-  ]);
 
   return (
     <div className="min-h-screen">
@@ -91,28 +91,40 @@ export default async function CategoriaPage({ params }: Props) {
             </div>
           )}
 
-          {products.length === 0 ? (
-            <div className="py-12 text-center">
-              <p className="text-muted-foreground">
-                No hay productos disponibles en esta categoria por el momento.
-              </p>
-              <Link
-                href="/"
-                className="mt-4 inline-block text-sm text-primary hover:underline"
-              >
-                Volver al inicio
-              </Link>
-            </div>
-          ) : (
-            <>
-              <p className="mb-6 text-sm text-muted-foreground">
-                {products.length} producto{products.length !== 1 ? "s" : ""}
-              </p>
-              <ProductGrid products={products} />
-            </>
-          )}
+          <Suspense fallback={<ProductGridSkeleton />}>
+            <CategoryProducts slug={slug} />
+          </Suspense>
         </div>
       </section>
     </div>
+  );
+}
+
+async function CategoryProducts({ slug }: { slug: string }) {
+  const products = await getPublicProductsByCategorySlug(slug);
+
+  if (products.length === 0) {
+    return (
+      <div className="py-12 text-center">
+        <p className="text-muted-foreground">
+          No hay productos disponibles en esta categoria por el momento.
+        </p>
+        <Link
+          href="/"
+          className="mt-4 inline-block text-sm text-primary hover:underline"
+        >
+          Volver al inicio
+        </Link>
+      </div>
+    );
+  }
+
+  return (
+    <>
+      <p className="mb-6 text-sm text-muted-foreground">
+        {products.length} producto{products.length !== 1 ? "s" : ""}
+      </p>
+      <ProductGrid products={products} />
+    </>
   );
 }

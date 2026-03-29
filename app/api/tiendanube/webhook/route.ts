@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { revalidateTag } from "next/cache";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { verifyWebhookSignature } from "@/lib/tiendanube/webhook";
 import { createTiendanubeClient } from "@/lib/tiendanube/client";
@@ -100,6 +101,14 @@ async function handleProductDeleted(
   tiendanubeProductId: number,
   logCtx: string
 ): Promise<void> {
+  // Get product ID before deletion for cache invalidation
+  const { data: product } = await supabaseAdmin
+    .from("products")
+    .select("id")
+    .eq("store_id", storeId)
+    .eq("tiendanube_product_id", String(tiendanubeProductId))
+    .maybeSingle();
+
   const { error } = await supabaseAdmin
     .from("products")
     .delete()
@@ -110,6 +119,11 @@ async function handleProductDeleted(
     console.error(`[Webhook][ERROR] ${logCtx} result=delete_error msg=${error.message}`);
   } else {
     console.log(`[Webhook] ${logCtx} result=deleted`);
+    // Invalidate cache (stale-while-revalidate)
+    revalidateTag("products", "max");
+    if (product?.id) {
+      revalidateTag(`product-${product.id}`, "max");
+    }
   }
 }
 
@@ -142,8 +156,10 @@ async function handleProductUpsert(
   if (syncResult.success) {
     const action = syncResult.isNew ? "created" : "updated";
     console.log(`[Webhook] ${logCtx} result=${action} local_id=${syncResult.productId}`);
+    // Cache invalidation handled by syncSingleProduct
   } else {
     console.error(`[Webhook][ERROR] ${logCtx} result=sync_error msg=${syncResult.error}`);
+    // Cache invalidation handled by syncSingleProduct (even on partial failure)
   }
 }
 
@@ -183,6 +199,13 @@ async function handleAppUninstalled(
     return { success: true, status: "already_deleted" };
   }
 
+  // Get store slug before deletion for cache invalidation
+  const { data: storeData } = await supabaseAdmin
+    .from("stores")
+    .select("slug")
+    .eq("id", store.id)
+    .maybeSingle();
+
   // Call soft_delete_store function
   const { error } = await supabaseAdmin.rpc("soft_delete_store", {
     p_store_id: store.id,
@@ -194,6 +217,12 @@ async function handleAppUninstalled(
   } else {
     console.log(`[Webhook] store disabled local_id=${store.id}`);
     console.log(`[Webhook] ${logCtx} result=store_disabled`);
+    // Invalidate cache (stale-while-revalidate)
+    revalidateTag("stores", "max");
+    revalidateTag("products", "max");
+    if (storeData?.slug) {
+      revalidateTag(`store-${storeData.slug}`, "max");
+    }
     return { success: true, status: "store_disabled" };
   }
 }
