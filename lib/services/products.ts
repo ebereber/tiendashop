@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { createPublicClient } from "@/lib/supabase/public";
 import { getCurrentMembership } from "@/lib/auth/get-current-membership";
 import { cache } from "react";
 
@@ -33,7 +34,7 @@ export interface ProductWithDetails {
 }
 
 export const getPublicProductById = cache(async (id: string): Promise<ProductWithDetails | null> => {
-  const supabase = await createClient();
+  const supabase = createPublicClient();
 
   const { data, error } = await supabase
     .from("products")

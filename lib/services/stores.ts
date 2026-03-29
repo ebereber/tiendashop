@@ -1,7 +1,5 @@
-"use server";
-
-import { createClient } from "@/lib/supabase/server";
 import { cache } from "react";
+import { createPublicClient } from "@/lib/supabase/public";
 import type { ProductWithStore } from "./search";
 
 export interface PublicStore {
@@ -27,7 +25,7 @@ export interface StoreProductsParams {
 }
 
 export const getStoreBySlug = cache(async (slug: string): Promise<PublicStore | null> => {
-  const supabase = await createClient();
+  const supabase = createPublicClient();
 
   const { data, error } = await supabase
     .from("stores")
@@ -49,7 +47,7 @@ export const getStoreBySlug = cache(async (slug: string): Promise<PublicStore | 
 // Uses product_categories which reflects the effective category (coalesce of manual/auto)
 export const getCategoriesByStore = cache(
   async (storeId: string): Promise<StoreCategory[]> => {
-    const supabase = await createClient();
+    const supabase = createPublicClient();
 
     // Get category IDs from product_categories for visible products
     const { data: productCategories, error } = await supabase
@@ -124,7 +122,7 @@ export async function getPublicProductsByStoreId(
     limit = 48,
   } = params;
 
-  const supabase = await createClient();
+  const supabase = createPublicClient();
 
   // If filtering by category, first get product IDs from product_categories
   let productIdsFilter: string[] | null = null;

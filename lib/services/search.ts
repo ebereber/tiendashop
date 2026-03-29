@@ -1,6 +1,4 @@
-"use server";
-
-import { createClient } from "@/lib/supabase/server";
+import { createPublicClient } from "@/lib/supabase/public";
 
 export interface ProductWithStore {
   id: string;
@@ -39,7 +37,7 @@ export async function getPublicProducts(
     limit = 48,
   } = params;
 
-  const supabase = await createClient();
+  const supabase = createPublicClient();
 
   // If filtering by category, first get product IDs from product_categories
   let productIdsFilter: string[] | null = null;

@@ -1,6 +1,6 @@
 import { cache } from "react";
 import { supabaseAdmin } from "@/lib/supabase/admin";
-import { createClient } from "@/lib/supabase/server";
+import { createPublicClient } from "@/lib/supabase/public";
 import type { ProductWithStore } from "./search";
 
 export interface CategoryWithParent {
@@ -62,7 +62,7 @@ export const getAllCategories = cache(async (): Promise<CategoryWithParent[]> =>
 // Solo categorías de nivel 0 (principales) para la navegación pública
 // Usa product_categories que refleja la categoría efectiva (coalesce de manual/auto)
 export const getPublicCategories = cache(async (): Promise<PublicCategory[]> => {
-  const supabase = await createClient();
+  const supabase = createPublicClient();
 
   // Get category IDs from product_categories for visible products
   const { data: productCategories, error } = await supabase
@@ -128,7 +128,7 @@ export const getPublicCategories = cache(async (): Promise<PublicCategory[]> => 
 // URL: /categoria/hogar-deco → pathSegment = 'hogar-deco'
 export const getPublicCategoryBySlug = cache(
   async (pathSegment: string): Promise<PublicCategoryDetails | null> => {
-    const supabase = await createClient();
+    const supabase = createPublicClient();
 
     // Get the category by path (path matches URL segment for depth=0)
     const { data: category, error } = await supabase
@@ -185,7 +185,7 @@ export const getPublicSubcategoryBySlugs = cache(
     parentSegment: string,
     childSegment: string
   ): Promise<{ category: PublicCategoryDetails; parent: PublicCategory } | null> => {
-    const supabase = await createClient();
+    const supabase = createPublicClient();
 
     const fullPath = `${parentSegment}/${childSegment}`;
 
@@ -197,7 +197,7 @@ export const getPublicSubcategoryBySlugs = cache(
       .eq("depth", 1)
       .maybeSingle();
 
-    if (childError || !child) {
+    if (childError || !child || !child.parent_id) {
       return null;
     }
 
@@ -236,7 +236,7 @@ export async function getPublicProductsByCategorySlug(
   pathSegment: string,
   limit: number = 48
 ): Promise<ProductWithStore[]> {
-  const supabase = await createClient();
+  const supabase = createPublicClient();
 
   // Get the category by path
   const { data: category } = await supabase
@@ -327,7 +327,7 @@ export async function getPublicProductsBySubcategorySlug(
   childSlug: string,
   limit: number = 48
 ): Promise<ProductWithStore[]> {
-  const supabase = await createClient();
+  const supabase = createPublicClient();
 
   // Validate and get the subcategory
   const result = await getPublicSubcategoryBySlugs(parentSlug, childSlug);
@@ -401,7 +401,7 @@ export async function getPublicProductsBySubcategorySlug(
 // Get all main categories with their subcategories for navigation
 export const getPublicCategoryNavigation = cache(
   async (): Promise<CategoryNavItem[]> => {
-    const supabase = await createClient();
+    const supabase = createPublicClient();
 
     // Get all categories
     const { data: categories, error } = await supabase
